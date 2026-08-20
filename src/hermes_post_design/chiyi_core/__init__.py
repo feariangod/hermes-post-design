@@ -30,6 +30,10 @@ from hermes_post_design.chiyi_core.sizing import (
     SIZE_MULTIPLE,
     resolve_size,
 )
+from hermes_post_design.chiyi_core.sources import (
+    SourceLoader,
+    load_sources,
+)
 
 __all__ = [
     "Operation",
@@ -57,4 +61,6 @@ __all__ = [
     "inspect_image",
     "normalize_image",
     "save_artifact",
+    "SourceLoader",
+    "load_sources",
 ]
