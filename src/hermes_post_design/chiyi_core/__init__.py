@@ -1,4 +1,11 @@
 """Chiyi Core - Core data models and types."""
+from hermes_post_design.chiyi_core.artifacts import save_artifact
+from hermes_post_design.chiyi_core.images import (
+    MAX_IMAGE_BYTES,
+    MAX_IMAGE_PIXELS,
+    inspect_image,
+    normalize_image,
+)
 from hermes_post_design.chiyi_core.models import (
     CompletedArtifact,
     CoreError,
@@ -45,4 +52,9 @@ __all__ = [
     "MIN_UPSTREAM_PIXELS",
     "MAX_UPSTREAM_PIXELS",
     "SIZE_MULTIPLE",
+    "MAX_IMAGE_BYTES",
+    "MAX_IMAGE_PIXELS",
+    "inspect_image",
+    "normalize_image",
+    "save_artifact",
 ]
