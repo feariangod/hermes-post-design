@@ -30,6 +30,7 @@ from hermes_post_design.chiyi_core.sizing import (
     SIZE_MULTIPLE,
     resolve_size,
 )
+from hermes_post_design.chiyi_core.client import ChiyiClient
 from hermes_post_design.chiyi_core.sources import (
     SourceLoader,
     load_sources,
@@ -65,4 +66,5 @@ __all__ = [
     "SourceLoader",
     "load_sources",
     "parse_sse",
+    "ChiyiClient",
 ]
