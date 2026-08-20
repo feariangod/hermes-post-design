@@ -34,6 +34,7 @@ from hermes_post_design.chiyi_core.sources import (
     SourceLoader,
     load_sources,
 )
+from hermes_post_design.chiyi_core.streaming import parse_sse
 
 __all__ = [
     "Operation",
@@ -63,4 +64,5 @@ __all__ = [
     "save_artifact",
     "SourceLoader",
     "load_sources",
+    "parse_sse",
 ]
