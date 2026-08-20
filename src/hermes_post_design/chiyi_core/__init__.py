@@ -13,6 +13,16 @@ from hermes_post_design.chiyi_core.models import (
     Operation,
     SizePlan,
 )
+from hermes_post_design.chiyi_core.sizing import (
+    DEFAULT_SIZE,
+    MAX_CUSTOM_DIMENSION,
+    MAX_UPSTREAM_PIXELS,
+    MIN_CUSTOM_SHORT_EDGE,
+    MIN_OUTPUT_SHORT_EDGE,
+    MIN_UPSTREAM_PIXELS,
+    SIZE_MULTIPLE,
+    resolve_size,
+)
 
 __all__ = [
     "Operation",
@@ -27,4 +37,12 @@ __all__ = [
     "ImageArtifact",
     "CoreError",
     "CoreResult",
+    "resolve_size",
+    "DEFAULT_SIZE",
+    "MIN_OUTPUT_SHORT_EDGE",
+    "MIN_CUSTOM_SHORT_EDGE",
+    "MAX_CUSTOM_DIMENSION",
+    "MIN_UPSTREAM_PIXELS",
+    "MAX_UPSTREAM_PIXELS",
+    "SIZE_MULTIPLE",
 ]
