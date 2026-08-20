@@ -1,0 +1,20 @@
+{
+  "name": "poster-design-skill-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "runtime:sync": "node scripts/sync-runtime.mjs",
+    "runtime:check": "node scripts/sync-runtime.mjs --check",
+    "test": "npm run runtime:check"
+  },
+  "dependencies": {
+    "@fontsource-variable/noto-sans-sc": "5.3.0",
+    "@fontsource-variable/noto-serif-sc": "5.3.0",
+    "@fontsource/ma-shan-zheng": "5.3.0",
+    "jsqr": "1.4.0",
+    "pdf-lib": "1.17.1",
+    "playwright": "1.62.1",
+    "pngjs": "7.0.0",
+    "qrcode": "1.5.4"
+  }
+}

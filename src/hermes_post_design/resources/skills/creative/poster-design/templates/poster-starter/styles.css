@@ -1,0 +1,65 @@
+@page {
+  size: var(--page-width) var(--page-height);
+  margin: 0;
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  src: url("assets/fonts/NotoSansSC-VF.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Noto Serif SC";
+  src: url("assets/fonts/NotoSerifSC-VF.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Ma Shan Zheng";
+  src: url("assets/fonts/MaShanZheng-Latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Ma Shan Zheng";
+  src: url("assets/fonts/MaShanZheng-SC.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+:root {
+  --canvas-width: 1080px;
+  --canvas-height: 1440px;
+  --page-width: 1080px;
+  --page-height: 1440px;
+  --ink: #17211b;
+  --paper: #f5f2e8;
+  --accent: #9f792f;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #d8d8d8; }
+body { font-family: "Noto Sans SC", sans-serif; }
+.poster {
+  position: relative;
+  width: var(--canvas-width);
+  min-height: var(--canvas-height);
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--paper);
+}
+.poster__content { padding: 8%; }
+.eyebrow { color: var(--accent); font-weight: 700; }
+h1 { margin: 0; font-family: "Noto Serif SC", serif; font-size: 6rem; line-height: 1.05; }
+@media print {
+  html, body { background: transparent; }
+  .poster { width: var(--page-width); min-height: var(--page-height); }
+}

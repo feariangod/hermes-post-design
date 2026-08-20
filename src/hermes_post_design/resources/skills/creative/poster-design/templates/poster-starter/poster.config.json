@@ -1,0 +1,14 @@
+{
+  "title": "Poster",
+  "status": "preview",
+  "canvas": {
+    "type": "digital",
+    "width": 1080,
+    "height": 1440
+  },
+  "outputs": {
+    "png": "poster.png",
+    "mobile": "poster-mobile.png",
+    "pdf": "poster.pdf"
+  }
+}

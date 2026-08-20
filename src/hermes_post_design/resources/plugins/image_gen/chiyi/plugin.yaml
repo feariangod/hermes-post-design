@@ -1,0 +1,7 @@
+name: chiyi
+version: 0.3.0
+description: "Chiyi GPT Image 2 backend powered by hermes-post-design."
+author: feariangod
+kind: backend
+requires_env:
+  - CHIYI_IMAGE_API_KEY
