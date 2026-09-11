@@ -110,6 +110,11 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
       file: font.file,
       sha256: font.sha256,
       licenseFile: font.licenseFile,
+      licenseSha256: {
+        'Ma Shan Zheng': '37784825d863bab31cdff1f4bfabae5b8d8e9913b91db2064a6b803b2edc92db',
+        'Noto Sans SC': '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
+        'Noto Serif SC': '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
+      }[font.family],
       licenseId: 'OFL-1.1',
       licenseName: 'SIL Open Font License',
       licenseVersion: '1.1',
@@ -120,6 +125,9 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
       }[font.family],
     })),
   );
+  for (const record of licenseManifest.records) {
+    assert.equal(await sha256(path.join(project, record.licenseFile)), record.licenseSha256);
+  }
 
   const css = await readFile(path.join(project, 'styles.css'), 'utf8');
   for (const font of manifest.fonts) {

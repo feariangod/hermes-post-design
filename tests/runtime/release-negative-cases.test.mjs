@@ -44,6 +44,11 @@ const licenseSourceByFamily = {
   'Noto Sans SC': '@fontsource-variable/noto-sans-sc@5.3.0',
   'Noto Serif SC': '@fontsource-variable/noto-serif-sc@5.3.0',
 };
+const licenseHashByFamily = {
+  'Ma Shan Zheng': '37784825d863bab31cdff1f4bfabae5b8d8e9913b91db2064a6b803b2edc92db',
+  'Noto Sans SC': '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
+  'Noto Serif SC': '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
+};
 
 function licenseRecord(font) {
   return {
@@ -51,6 +56,7 @@ function licenseRecord(font) {
     file: font.file,
     sha256: font.sha256,
     licenseFile: font.licenseFile,
+    licenseSha256: licenseHashByFamily[font.family],
     licenseId: 'OFL-1.1',
     licenseName: 'SIL Open Font License',
     licenseVersion: '1.1',
@@ -265,11 +271,6 @@ async function createReleaseProject(context, scenario) {
       manifest.fonts[0].sha256 = '0'.repeat(64);
       await writeJson(manifestPath, manifest);
     }
-    const manifest = await readJson(path.join(project, 'font-manifest.json'));
-    await updateLicenseRecordHashes(project, manifest);
-    const licensesPath = path.join(project, 'licenses.md');
-    const licenses = await readFile(licensesPath, 'utf8');
-    await writeFile(licensesPath, licenses.replace(/[0-9a-f]{64}/, '0'.repeat(64)));
   }
   if (scenario === 'font-path') {
     for (const relative of ['font-manifest.json', 'assets/fonts/font-manifest.json']) {
@@ -311,6 +312,57 @@ async function createReleaseProject(context, scenario) {
     [first.licenseFile, second.licenseFile] = [second.licenseFile, first.licenseFile];
     await writeJson(path.join(project, 'font-license-manifest.json'), licenseManifest);
     await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
+  }
+  if (scenario === 'font-license-coordinated-swap') {
+    const maLicense = 'assets/licenses/MaShanZheng-OFL-1.1.txt';
+    const serifLicense = 'assets/licenses/NotoSerifSC-OFL-1.1.txt';
+    for (const relative of ['font-manifest.json', 'assets/fonts/font-manifest.json']) {
+      const manifestPath = path.join(project, relative);
+      const manifest = await readJson(manifestPath);
+      for (const font of manifest.fonts) {
+        if (font.family === 'Ma Shan Zheng') font.licenseFile = serifLicense;
+        if (font.family === 'Noto Serif SC') font.licenseFile = maLicense;
+      }
+      await writeJson(manifestPath, manifest);
+    }
+    const licenseManifest = await ensureLicenseManifests(project);
+    for (const record of licenseManifest.records) {
+      if (record.family === 'Ma Shan Zheng') {
+        record.licenseFile = serifLicense;
+        if (Object.hasOwn(record, 'licenseSha256')) record.licenseSha256 = licenseHashByFamily['Noto Serif SC'];
+      }
+      if (record.family === 'Noto Serif SC') {
+        record.licenseFile = maLicense;
+        if (Object.hasOwn(record, 'licenseSha256')) record.licenseSha256 = licenseHashByFamily['Ma Shan Zheng'];
+      }
+    }
+    await writeJson(path.join(project, 'font-license-manifest.json'), licenseManifest);
+    await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
+    const licensesPath = path.join(project, 'licenses.md');
+    const licenses = await readFile(licensesPath, 'utf8');
+    await writeFile(licensesPath, licenses
+      .replaceAll(maLicense, '__MA_LICENSE__')
+      .replaceAll(serifLicense, maLicense)
+      .replaceAll('__MA_LICENSE__', serifLicense)
+      .replaceAll(licenseHashByFamily['Ma Shan Zheng'], '__MA_LICENSE_HASH__')
+      .replaceAll(licenseHashByFamily['Noto Serif SC'], licenseHashByFamily['Ma Shan Zheng'])
+      .replaceAll('__MA_LICENSE_HASH__', licenseHashByFamily['Noto Serif SC']));
+  }
+  if (scenario === 'font-license-content') {
+    const manifest = await readJson(path.join(project, 'font-manifest.json'));
+    const targetLicense = manifest.fonts.find((font) => font.family === 'Ma Shan Zheng').licenseFile;
+    const targetPath = path.join(project, targetLicense);
+    const oldHash = await sha256(targetPath);
+    await writeFile(targetPath, 'arbitrary replacement license content\n');
+    const replacementHash = await sha256(targetPath);
+    const licenseManifest = await ensureLicenseManifests(project);
+    for (const record of licenseManifest.records.filter((item) => item.licenseFile === targetLicense)) {
+      if (Object.hasOwn(record, 'licenseSha256')) record.licenseSha256 = replacementHash;
+    }
+    await writeJson(path.join(project, 'font-license-manifest.json'), licenseManifest);
+    await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
+    const licensesPath = path.join(project, 'licenses.md');
+    await writeFile(licensesPath, (await readFile(licensesPath, 'utf8')).replaceAll(oldHash, replacementHash));
   }
   if (scenario === 'font-local-source') {
     const cssPath = path.join(project, 'styles.css');
@@ -416,6 +468,8 @@ for (const [scenario, expectedCodes] of [
   ['font-glyph', ['FONT_GLYPH_MISSING']],
   ['font-license', ['FONT_LICENSE_MISSING']],
   ['font-license-swap', ['FONT_LICENSE_BINDING_MISMATCH']],
+  ['font-license-coordinated-swap', ['FONT_LICENSE_BINDING_MISMATCH']],
+  ['font-license-content', ['FONT_LICENSE_BINDING_MISMATCH']],
   ['starter-copy', ['UNRESOLVED_PLACEHOLDER']],
   ['output-hash', ['OUTPUT_HASH_MISMATCH']],
   ['visual-review', ['VISUAL_REVIEW_STALE']],

@@ -9,6 +9,7 @@ const FONT_SPECS = [
     file: 'assets/fonts/MaShanZheng-Chinese.woff2',
     licenseSource: '@fontsource/ma-shan-zheng/LICENSE',
     licenseFile: 'assets/licenses/MaShanZheng-OFL-1.1.txt',
+    licenseSha256: '37784825d863bab31cdff1f4bfabae5b8d8e9913b91db2064a6b803b2edc92db',
     package: '@fontsource/ma-shan-zheng@5.3.0',
     samples: ['中文海报'],
   },
@@ -18,6 +19,7 @@ const FONT_SPECS = [
     file: 'assets/fonts/MaShanZheng-Latin.woff2',
     licenseSource: '@fontsource/ma-shan-zheng/LICENSE',
     licenseFile: 'assets/licenses/MaShanZheng-OFL-1.1.txt',
+    licenseSha256: '37784825d863bab31cdff1f4bfabae5b8d8e9913b91db2064a6b803b2edc92db',
     package: '@fontsource/ma-shan-zheng@5.3.0',
     samples: ['Poster title'],
   },
@@ -27,6 +29,7 @@ const FONT_SPECS = [
     file: 'assets/fonts/NotoSansSC-ChineseSubset.woff2',
     licenseSource: '@fontsource-variable/noto-sans-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSansSC-OFL-1.1.txt',
+    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
     package: '@fontsource-variable/noto-sans-sc@5.3.0',
     samples: ['中'],
   },
@@ -36,6 +39,7 @@ const FONT_SPECS = [
     file: 'assets/fonts/NotoSansSC-Latin.woff2',
     licenseSource: '@fontsource-variable/noto-sans-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSansSC-OFL-1.1.txt',
+    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
     package: '@fontsource-variable/noto-sans-sc@5.3.0',
     samples: ['Poster title'],
   },
@@ -45,6 +49,7 @@ const FONT_SPECS = [
     file: 'assets/fonts/NotoSerifSC-ChineseSubset.woff2',
     licenseSource: '@fontsource-variable/noto-serif-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSerifSC-OFL-1.1.txt',
+    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
     package: '@fontsource-variable/noto-serif-sc@5.3.0',
     samples: ['中'],
   },
@@ -54,6 +59,7 @@ const FONT_SPECS = [
     file: 'assets/fonts/NotoSerifSC-Latin.woff2',
     licenseSource: '@fontsource-variable/noto-serif-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSerifSC-OFL-1.1.txt',
+    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
     package: '@fontsource-variable/noto-serif-sc@5.3.0',
     samples: ['Poster title'],
   },
@@ -86,6 +92,7 @@ function licenseRecords(fonts) {
     file: font.file,
     sha256: font.sha256,
     licenseFile: font.licenseFile,
+    licenseSha256: FONT_SPECS[index].licenseSha256,
     ...LICENSE,
     sourcePackage: FONT_SPECS[index].package,
   }));
@@ -100,6 +107,7 @@ function licensesMarkdown(fonts, records) {
     `- SHA-256: \`${record.sha256}\``,
     `- License: ${record.licenseName} ${record.licenseVersion} (\`${record.licenseId}\`)`,
     `- License file: \`${record.licenseFile}\``,
+    `- License SHA-256: \`${record.licenseSha256}\``,
   ].join('\n'));
   return `# Font and Asset Licenses\n\nGenerated from project-local pinned dependencies by \`npm run prepare\`.\n\n${sections.join('\n\n')}\n`;
 }
@@ -121,6 +129,10 @@ async function main() {
     await copyFile(sourcePath, targetPath);
     if (!copiedLicenses.has(spec.licenseFile)) {
       await copyFile(licenseSourcePath, licenseTargetPath);
+      const actualLicenseSha256 = await sha256(licenseTargetPath);
+      if (actualLicenseSha256 !== spec.licenseSha256) {
+        throw new Error(`Pinned license hash mismatch for ${spec.family}: expected ${spec.licenseSha256}, got ${actualLicenseSha256}`);
+      }
       copiedLicenses.add(spec.licenseFile);
     }
     fonts.push({

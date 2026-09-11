@@ -12,10 +12,22 @@ const MODE_MAX_STATE = { concept: 'visual_locked', publish: 'publish', release: 
 const PUBLISH_QA_FIELDS = ['size', 'facts', 'identity', 'logo', 'qr', 'mobile', 'artifacts'];
 const REQUIRED_FONT_FAMILIES = new Set(['Noto Sans SC', 'Noto Serif SC', 'Ma Shan Zheng']);
 const ALWAYS_APPLICABLE_PUBLISH_FIELDS = new Set(['size', 'facts', 'mobile', 'artifacts']);
-const FONT_LICENSE_SOURCES = {
-  'Ma Shan Zheng': '@fontsource/ma-shan-zheng@5.3.0',
-  'Noto Sans SC': '@fontsource-variable/noto-sans-sc@5.3.0',
-  'Noto Serif SC': '@fontsource-variable/noto-serif-sc@5.3.0',
+const FONT_LICENSE_POLICY = {
+  'Ma Shan Zheng': {
+    licenseFile: 'assets/licenses/MaShanZheng-OFL-1.1.txt',
+    licenseSha256: '37784825d863bab31cdff1f4bfabae5b8d8e9913b91db2064a6b803b2edc92db',
+    sourcePackage: '@fontsource/ma-shan-zheng@5.3.0',
+  },
+  'Noto Sans SC': {
+    licenseFile: 'assets/licenses/NotoSansSC-OFL-1.1.txt',
+    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
+    sourcePackage: '@fontsource-variable/noto-sans-sc@5.3.0',
+  },
+  'Noto Serif SC': {
+    licenseFile: 'assets/licenses/NotoSerifSC-OFL-1.1.txt',
+    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
+    sourcePackage: '@fontsource-variable/noto-serif-sc@5.3.0',
+  },
 };
 const FONT_FAMILY_PREFIXES = {
   'Ma Shan Zheng': ['Ma Shan Zheng'],
@@ -23,7 +35,7 @@ const FONT_FAMILY_PREFIXES = {
   'Noto Serif SC': ['Noto Serif SC'],
 };
 const FONT_STYLE_SUFFIX = /^(?:Thin|ExtraLight|Light|Regular|Medium|SemiBold|Bold|ExtraBold|Black)(?:Italic)?$/i;
-const LICENSE_RECORD_FIELDS = ['family', 'file', 'sha256', 'licenseFile', 'licenseId', 'licenseName', 'licenseVersion', 'sourcePackage'];
+const LICENSE_RECORD_FIELDS = ['family', 'file', 'sha256', 'licenseFile', 'licenseSha256', 'licenseId', 'licenseName', 'licenseVersion', 'sourcePackage'];
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -330,6 +342,8 @@ export async function validateFontManifest(project, manifest) {
   const declaredFiles = new Set();
   const families = new Set();
   const digestsByFamily = new Map();
+  const actualFontDigests = new Map();
+  const checkedLicenseFiles = new Map();
 
   for (const [index, font] of fonts.entries()) {
     if (!isObject(font)) {
@@ -358,6 +372,7 @@ export async function validateFontManifest(project, manifest) {
       } else if (sourcePath) {
         const buffer = await readFile(sourcePath);
         const actual = createHash('sha256').update(buffer).digest('hex');
+        actualFontDigests.set(fontFile, actual);
         if (actual !== font.sha256) {
           findings.push(fontFinding('FONT_HASH_MISMATCH', 'Font file SHA-256 does not match the manifest.', { path: fontFile, expected: font.sha256, actual }));
         }
@@ -403,10 +418,30 @@ export async function validateFontManifest(project, manifest) {
     }
 
     const licenseFile = normalizeManifestPath(font.licenseFile, 'assets/licenses/');
+    const licensePolicy = FONT_LICENSE_POLICY[family];
     if (!licenseFile) {
       findings.push(fontFinding('FONT_PATH_INVALID', 'Font license path must be an exact normalized path under assets/licenses/.', { index, path: font.licenseFile ?? null }));
     } else {
-      await validateManifestFile(projectRealPath, licenseFile, 'Declared font license file', 'FONT_LICENSE_MISSING', findings);
+      if (!licensePolicy || licenseFile !== licensePolicy.licenseFile) {
+        findings.push(fontFinding('FONT_LICENSE_BINDING_MISMATCH', 'Font license path is not allowed by the validator-owned family policy.', {
+          family,
+          actual: licenseFile,
+          expected: licensePolicy?.licenseFile ?? null,
+        }));
+      }
+      const licensePath = await validateManifestFile(projectRealPath, licenseFile, 'Declared font license file', 'FONT_LICENSE_MISSING', findings);
+      if (licensePath && licensePolicy && !checkedLicenseFiles.has(licenseFile)) {
+        const actualLicenseSha256 = createHash('sha256').update(await readFile(licensePath)).digest('hex');
+        checkedLicenseFiles.set(licenseFile, actualLicenseSha256);
+        if (actualLicenseSha256 !== licensePolicy.licenseSha256) {
+          findings.push(fontFinding('FONT_LICENSE_BINDING_MISMATCH', 'Font license content does not match the validator-owned pinned license hash.', {
+            family,
+            path: licenseFile,
+            actual: actualLicenseSha256,
+            expected: licensePolicy.licenseSha256,
+          }));
+        }
+      }
     }
   }
 
@@ -444,15 +479,17 @@ export async function validateFontManifest(project, manifest) {
       findings.push(fontFinding('FONT_LICENSE_BINDING_MISMATCH', 'Font license manifest shape or record count is invalid.'));
     }
     for (const font of fonts.filter(isObject)) {
+      const policy = FONT_LICENSE_POLICY[font.family];
       const expected = {
         family: font.family,
         file: font.file,
-        sha256: font.sha256,
-        licenseFile: font.licenseFile,
+        sha256: actualFontDigests.get(font.file) ?? font.sha256,
+        licenseFile: policy?.licenseFile ?? null,
+        licenseSha256: policy?.licenseSha256 ?? null,
         licenseId: 'OFL-1.1',
         licenseName: 'SIL Open Font License',
         licenseVersion: '1.1',
-        sourcePackage: FONT_LICENSE_SOURCES[font.family] ?? null,
+        sourcePackage: policy?.sourcePackage ?? null,
       };
       const exactMatches = records.filter((record) => exactLicenseRecord(record, expected));
       if (exactMatches.length !== 1) {
