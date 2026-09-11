@@ -72,6 +72,7 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
   run('npm', ['ci'], { cwd: project });
   run('npm', ['run', 'prepare'], { cwd: project });
   await access(path.join(project, 'node_modules/playwright/package.json'));
+  await access(path.join(project, 'node_modules/fontkit/package.json'));
 
   const manifest = JSON.parse(await readFile(path.join(project, 'assets/fonts/font-manifest.json'), 'utf8'));
   assert.deepEqual(JSON.parse(await readFile(path.join(project, 'font-manifest.json'), 'utf8')), manifest);
@@ -95,6 +96,30 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
     await access(licensePath);
     assert.equal(await sha256(fontPath), font.sha256);
   }
+
+  const licenseManifest = JSON.parse(await readFile(path.join(project, 'font-license-manifest.json'), 'utf8'));
+  assert.deepEqual(
+    JSON.parse(await readFile(path.join(project, 'assets/licenses/font-license-manifest.json'), 'utf8')),
+    licenseManifest,
+  );
+  assert.equal(licenseManifest.version, 1);
+  assert.deepEqual(
+    licenseManifest.records,
+    manifest.fonts.map((font) => ({
+      family: font.family,
+      file: font.file,
+      sha256: font.sha256,
+      licenseFile: font.licenseFile,
+      licenseId: 'OFL-1.1',
+      licenseName: 'SIL Open Font License',
+      licenseVersion: '1.1',
+      sourcePackage: {
+        'Ma Shan Zheng': '@fontsource/ma-shan-zheng@5.3.0',
+        'Noto Sans SC': '@fontsource-variable/noto-sans-sc@5.3.0',
+        'Noto Serif SC': '@fontsource-variable/noto-serif-sc@5.3.0',
+      }[font.family],
+    })),
+  );
 
   const css = await readFile(path.join(project, 'styles.css'), 'utf8');
   for (const font of manifest.fonts) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
@@ -121,6 +121,23 @@ test('inspect --strict writes a failed QA report when an explicit browser cannot
     '--browser', path.join(project, 'browser-does-not-exist'),
   ]);
   await assertStrictFailure(project, inspection, 'BROWSER_RESOLUTION_FAILED');
+});
+
+test('inspect --strict structures a font manifest file-read failure', { skip: process.platform === 'win32' }, async (context) => {
+  const temporaryRoot = await mkdtemp(path.join(skillRoot, '.structured-failure-'));
+  context.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const project = path.join(temporaryRoot, 'font-validation-poster');
+  requireSuccess(run('node', [initPoster, '--output', project, '--title', 'Font validation', '--type', 'digital']), 'node', [initPoster]);
+  await symlink(path.join(skillRoot, 'node_modules'), path.join(project, 'node_modules'), 'dir');
+  requireSuccess(run('node', [path.join(project, 'scripts/prepare-project.mjs'), '--project', project]), 'node', ['scripts/prepare-project.mjs']);
+  await unlink(path.join(project, 'node_modules'));
+  const manifest = JSON.parse(await readFile(path.join(project, 'font-manifest.json'), 'utf8'));
+  const protectedFont = path.join(project, manifest.fonts[0].file);
+  await chmod(protectedFont, 0o000);
+  context.after(() => chmod(protectedFont, 0o644).catch(() => {}));
+
+  const inspection = run('node', [path.join(project, 'scripts/inspect-poster.mjs'), '--project', project, '--strict']);
+  await assertStrictFailure(project, inspection, 'FONT_VALIDATION_FAILED');
 });
 
 for (const [scenario, expectedBlocker] of [

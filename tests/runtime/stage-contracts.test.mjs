@@ -80,6 +80,12 @@ test('poster state rejects used provider calls above the authorized budget', () 
   assert.ok(issues.some((issue) => /usedCalls must not exceed authorizedCalls/i.test(issue)), issues.join('\n'));
 });
 
+test('poster state rejects authorization counters that lose JSON integer precision', () => {
+  const parsed = JSON.parse('{"version":1,"mode":"publish","state":"intake","conceptRevision":0,"direction":null,"approvedCopy":[],"provider":{"adapter":"fake-image-adapter","external":true,"billed":true,"authorizedCalls":9007199254740993,"usedCalls":1}}');
+  const issues = validatePosterState(parsed);
+  assert.ok(issues.some((issue) => /authorizedCalls must be a non-negative safe integer/i.test(issue)), issues.join('\n'));
+});
+
 for (const [providerKind, article] of [['external', 'an'], ['billed', 'a']]) {
   test(`poster state rejects ${article} ${providerKind} provider without an authorization budget`, () => {
     const issues = validatePosterState(posterState({
@@ -124,7 +130,7 @@ test('publish QA rejects PASS while any required field remains PENDING', () => {
     qr: 'PASS',
     mobile: 'PASS',
   }));
-  assert.ok(issues.some((issue) => /artifacts must be PASS or NOT_APPLICABLE/i.test(issue)), issues.join('\n'));
+  assert.ok(issues.some((issue) => /artifacts must be PASS because it is applicable/i.test(issue)), issues.join('\n'));
 });
 
 test('publish QA accepts PASS only after every field is resolved', () => {
@@ -138,4 +144,55 @@ test('publish QA accepts PASS only after every field is resolved', () => {
     mobile: 'PASS',
     artifacts: 'PASS',
   })), []);
+});
+
+test('publish QA rejects NOT_APPLICABLE for always-required evidence', () => {
+  const issues = validatePublishQa(publishQa({
+    status: 'PASS',
+    size: 'NOT_APPLICABLE',
+    facts: 'NOT_APPLICABLE',
+    identity: 'NOT_APPLICABLE',
+    logo: 'NOT_APPLICABLE',
+    qr: 'NOT_APPLICABLE',
+    mobile: 'NOT_APPLICABLE',
+    artifacts: 'NOT_APPLICABLE',
+  }));
+  for (const field of ['size', 'facts', 'mobile', 'artifacts']) {
+    assert.ok(issues.some((issue) => new RegExp(`${field} must be PASS because it is applicable`, 'i').test(issue)), issues.join('\n'));
+  }
+});
+
+test('publish QA permits NOT_APPLICABLE only for absent optional elements', () => {
+  assert.deepEqual(validatePublishQa(publishQa({
+    status: 'PASS',
+    size: 'PASS',
+    facts: 'PASS',
+    identity: 'NOT_APPLICABLE',
+    logo: 'NOT_APPLICABLE',
+    qr: 'NOT_APPLICABLE',
+    mobile: 'PASS',
+    artifacts: 'PASS',
+  }, {
+    identity: false,
+    logo: false,
+    qr: false,
+  })), []);
+});
+
+test('publish QA rejects NOT_APPLICABLE for an optional element that is present', () => {
+  const issues = validatePublishQa(publishQa({
+    status: 'PASS',
+    size: 'PASS',
+    facts: 'PASS',
+    identity: 'NOT_APPLICABLE',
+    logo: 'NOT_APPLICABLE',
+    qr: 'NOT_APPLICABLE',
+    mobile: 'PASS',
+    artifacts: 'PASS',
+  }), {
+    identity: true,
+    logo: false,
+    qr: false,
+  });
+  assert.ok(issues.some((issue) => /identity must be PASS because it is applicable/i.test(issue)), issues.join('\n'));
 });

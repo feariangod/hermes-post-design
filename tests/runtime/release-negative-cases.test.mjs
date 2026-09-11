@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
@@ -13,6 +13,7 @@ const initPoster = path.join(skillRoot, 'scripts/init-poster.mjs');
 const requireFromSkill = createRequire(path.join(skillRoot, 'package.json'));
 const { PNG } = requireFromSkill('pngjs');
 const { PDFDocument, rgb } = requireFromSkill('pdf-lib');
+const fontkit = requireFromSkill('fontkit');
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -36,6 +37,51 @@ async function writeJson(filePath, value) {
 
 async function sha256(filePath) {
   return createHash('sha256').update(await readFile(filePath)).digest('hex');
+}
+
+const licenseSourceByFamily = {
+  'Ma Shan Zheng': '@fontsource/ma-shan-zheng@5.3.0',
+  'Noto Sans SC': '@fontsource-variable/noto-sans-sc@5.3.0',
+  'Noto Serif SC': '@fontsource-variable/noto-serif-sc@5.3.0',
+};
+
+function licenseRecord(font) {
+  return {
+    family: font.family,
+    file: font.file,
+    sha256: font.sha256,
+    licenseFile: font.licenseFile,
+    licenseId: 'OFL-1.1',
+    licenseName: 'SIL Open Font License',
+    licenseVersion: '1.1',
+    sourcePackage: licenseSourceByFamily[font.family],
+  };
+}
+
+async function ensureLicenseManifests(project) {
+  const rootPath = path.join(project, 'font-license-manifest.json');
+  let licenseManifest;
+  try {
+    licenseManifest = await readJson(rootPath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    const manifest = await readJson(path.join(project, 'font-manifest.json'));
+    licenseManifest = { version: 1, records: manifest.fonts.map(licenseRecord) };
+    await mkdir(path.join(project, 'assets/licenses'), { recursive: true });
+  }
+  await writeJson(rootPath, licenseManifest);
+  await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
+  return licenseManifest;
+}
+
+async function updateLicenseRecordHashes(project, manifest) {
+  const licenseManifest = await ensureLicenseManifests(project);
+  for (const font of manifest.fonts) {
+    const record = licenseManifest.records.find((item) => item.file === font.file);
+    if (record) record.sha256 = font.sha256;
+  }
+  await writeJson(path.join(project, 'font-license-manifest.json'), licenseManifest);
+  await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
 }
 
 async function writeOutputs(project) {
@@ -163,8 +209,8 @@ async function createReleaseProject(context, scenario) {
     status: 'PASS',
     size: 'PASS',
     facts: 'PASS',
-    identity: 'PASS',
-    logo: 'PASS',
+    identity: 'NOT_APPLICABLE',
+    logo: 'NOT_APPLICABLE',
     qr: 'NOT_APPLICABLE',
     mobile: 'PASS',
     artifacts: 'PASS',
@@ -186,6 +232,32 @@ async function createReleaseProject(context, scenario) {
     const css = await readFile(cssPath, 'utf8');
     await writeFile(cssPath, css.replaceAll(/@font-face\s*\{[^}]+\}\s*/gs, '').replaceAll(/"(?:Noto Sans SC|Noto Serif SC|Ma Shan Zheng)"/g, 'Arial'));
   }
+  if (scenario === 'font-family-masquerade') {
+    const sourceDirectory = path.join(skillRoot, 'node_modules/@fontsource-variable/noto-sans-sc/files');
+    const sources = [
+      'noto-sans-sc-latin-wght-normal.woff2',
+      'noto-sans-sc-latin-ext-wght-normal.woff2',
+      'noto-sans-sc-vietnamese-wght-normal.woff2',
+      'noto-sans-sc-cyrillic-wght-normal.woff2',
+      'noto-sans-sc-119-wght-normal.woff2',
+      'noto-sans-sc-82-wght-normal.woff2',
+    ];
+    const manifest = await readJson(path.join(project, 'font-manifest.json'));
+    let licenses = await readFile(path.join(project, 'licenses.md'), 'utf8');
+    for (const [index, font] of manifest.fonts.entries()) {
+      const previousHash = font.sha256;
+      await copyFile(path.join(sourceDirectory, sources[index]), path.join(project, font.file));
+      const parsed = fontkit.create(await readFile(path.join(project, font.file)));
+      const sampleCodePoint = parsed.characterSet.find((codePoint) => String.fromCodePoint(codePoint).trim() !== '');
+      font.samples = [String.fromCodePoint(sampleCodePoint)];
+      font.sha256 = await sha256(path.join(project, font.file));
+      licenses = licenses.replace(previousHash, font.sha256);
+    }
+    await writeJson(path.join(project, 'font-manifest.json'), manifest);
+    await writeJson(path.join(project, 'assets/fonts/font-manifest.json'), manifest);
+    await updateLicenseRecordHashes(project, manifest);
+    await writeFile(path.join(project, 'licenses.md'), licenses);
+  }
   if (scenario === 'font-hash') {
     for (const relative of ['font-manifest.json', 'assets/fonts/font-manifest.json']) {
       const manifestPath = path.join(project, relative);
@@ -193,6 +265,11 @@ async function createReleaseProject(context, scenario) {
       manifest.fonts[0].sha256 = '0'.repeat(64);
       await writeJson(manifestPath, manifest);
     }
+    const manifest = await readJson(path.join(project, 'font-manifest.json'));
+    await updateLicenseRecordHashes(project, manifest);
+    const licensesPath = path.join(project, 'licenses.md');
+    const licenses = await readFile(licensesPath, 'utf8');
+    await writeFile(licensesPath, licenses.replace(/[0-9a-f]{64}/, '0'.repeat(64)));
   }
   if (scenario === 'font-path') {
     for (const relative of ['font-manifest.json', 'assets/fonts/font-manifest.json']) {
@@ -201,6 +278,10 @@ async function createReleaseProject(context, scenario) {
       manifest.fonts[0].file = 'assets/fonts/../licenses/MaShanZheng-OFL-1.1.txt';
       await writeJson(manifestPath, manifest);
     }
+    const licenseManifest = await ensureLicenseManifests(project);
+    licenseManifest.records[0].file = 'assets/fonts/../licenses/MaShanZheng-OFL-1.1.txt';
+    await writeJson(path.join(project, 'font-license-manifest.json'), licenseManifest);
+    await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
   }
   if (scenario === 'font-samples') {
     for (const relative of ['font-manifest.json', 'assets/fonts/font-manifest.json']) {
@@ -210,9 +291,31 @@ async function createReleaseProject(context, scenario) {
       await writeJson(manifestPath, manifest);
     }
   }
+  if (scenario === 'font-glyph') {
+    for (const relative of ['font-manifest.json', 'assets/fonts/font-manifest.json']) {
+      const manifestPath = path.join(project, relative);
+      const manifest = await readJson(manifestPath);
+      const latinFont = manifest.fonts.find((font) => font.file === 'assets/fonts/NotoSansSC-Latin.woff2');
+      latinFont.samples = ['中'];
+      await writeJson(manifestPath, manifest);
+    }
+  }
   if (scenario === 'font-license') {
     const manifest = await readJson(path.join(project, 'font-manifest.json'));
     await rm(path.join(project, manifest.fonts[0].licenseFile));
+  }
+  if (scenario === 'font-license-swap') {
+    const licenseManifest = await ensureLicenseManifests(project);
+    const first = licenseManifest.records.find((record) => record.family === 'Ma Shan Zheng');
+    const second = licenseManifest.records.find((record) => record.family === 'Noto Serif SC');
+    [first.licenseFile, second.licenseFile] = [second.licenseFile, first.licenseFile];
+    await writeJson(path.join(project, 'font-license-manifest.json'), licenseManifest);
+    await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
+  }
+  if (scenario === 'font-local-source') {
+    const cssPath = path.join(project, 'styles.css');
+    const css = await readFile(cssPath, 'utf8');
+    await writeFile(cssPath, css.replace('src: url("assets/fonts/MaShanZheng-Chinese.woff2")', 'src: local("Arial"), url("assets/fonts/MaShanZheng-Chinese.woff2")'));
   }
   if (scenario === 'css-font-url') {
     await writeFile(path.join(project, 'styles.css'), `${await readFile(path.join(project, 'styles.css'), 'utf8')}\n@font-face { font-family: "Undeclared Font"; src: url("assets/fonts/undeclared.woff2") format("woff2"); }\n`);
@@ -242,6 +345,25 @@ async function createReleaseProject(context, scenario) {
     qa.artifacts = 'PENDING';
     await writeJson(qaPath, qa);
   }
+  if (scenario === 'publish-all-na') {
+    const qaPath = path.join(project, 'publish-qa.json');
+    const qa = await readJson(qaPath);
+    for (const field of ['size', 'facts', 'identity', 'logo', 'qr', 'mobile', 'artifacts']) qa[field] = 'NOT_APPLICABLE';
+    await writeJson(qaPath, qa);
+  }
+  if (scenario === 'publish-qr-na') {
+    const briefPath = path.join(project, 'brief.json');
+    const briefValue = await readJson(briefPath);
+    briefValue.qrCodes = [{ key: 'optional-qr', destination: 'https://example.test/', critical: false }];
+    await writeJson(briefPath, briefValue);
+  }
+  if (scenario === 'publish-identity-na') {
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', '<span class="speaker-portrait">Approved identity</span></section>'));
+  }
+  if (scenario === 'publish-logo-asset-na') {
+    await mkdir(path.join(project, 'assets/logos'), { recursive: true });
+    await writeFile(path.join(project, 'assets/logos/brand.txt'), 'authorized logo fixture');
+  }
 
   await writeOutputs(project);
   await writeCurrentEvidence(project);
@@ -261,31 +383,52 @@ async function createReleaseProject(context, scenario) {
   return project;
 }
 
-async function assertReleaseBlocked(context, scenario, expectedCode) {
+async function inspectRelease(context, scenario) {
   const project = await createReleaseProject(context, scenario);
   const inspection = run('node', [path.join(project, 'scripts/inspect-poster.mjs'), '--project', project, '--strict', '--final']);
-  assert.notEqual(inspection.status, 0, `inspect unexpectedly succeeded for ${scenario}\nstdout:\n${inspection.stdout}\nstderr:\n${inspection.stderr}`);
   const report = await readJson(path.join(project, 'qa-report.json'));
-  assert.equal(report.status, 'FAIL');
-  assert.equal(report.release.finalEligible, false);
-  assert.ok(report.blockers.some(({ code }) => code === expectedCode), JSON.stringify(report.blockers, null, 2));
+  return { project, inspection, report };
 }
 
-for (const [scenario, expectedCode] of [
-  ['system-font-substitution', 'UNDECLARED_FONT'],
-  ['font-hash', 'FONT_HASH_MISMATCH'],
-  ['font-path', 'FONT_PATH_INVALID'],
-  ['font-samples', 'FONT_MANIFEST_INVALID'],
-  ['font-license', 'FONT_LICENSE_MISSING'],
-  ['starter-copy', 'UNRESOLVED_PLACEHOLDER'],
-  ['output-hash', 'OUTPUT_HASH_MISMATCH'],
-  ['visual-review', 'VISUAL_REVIEW_STALE'],
-  ['css-font-url', 'UNDECLARED_FONT'],
-  ['invalid-transition', 'POSTER_STATE_INVALID'],
-  ['provider-authorization', 'POSTER_STATE_INVALID'],
-  ['publish-pending', 'PUBLISH_QA_INVALID'],
+async function assertReleaseBlocked(context, scenario, expectedCodes) {
+  const { inspection, report } = await inspectRelease(context, scenario);
+  assert.notEqual(inspection.status, 0, `inspect unexpectedly succeeded for ${scenario}\nstdout:\n${inspection.stdout}\nstderr:\n${inspection.stderr}`);
+  assert.equal(report.status, 'FAIL');
+  assert.equal(report.release.finalEligible, false);
+  assert.deepEqual([...new Set(report.blockers.map(({ code }) => code))].sort(), [...expectedCodes].sort(), JSON.stringify(report.blockers, null, 2));
+}
+
+test('Release accepts the mechanically clean baseline fixture', async (context) => {
+  const { inspection, report } = await inspectRelease(context, 'baseline');
+  assert.equal(inspection.status, 0, `stdout:\n${inspection.stdout}\nstderr:\n${inspection.stderr}\n${JSON.stringify(report.blockers, null, 2)}`);
+  assert.equal(report.status, 'PASS');
+  assert.equal(report.release.finalEligible, true);
+  assert.deepEqual(report.blockers, []);
+});
+
+for (const [scenario, expectedCodes] of [
+  ['system-font-substitution', ['FONT_LOAD_FAILED', 'UNDECLARED_FONT']],
+  ['font-family-masquerade', ['FONT_BINARY_FAMILY_MISMATCH']],
+  ['font-local-source', ['FONT_SOURCE_INVALID']],
+  ['font-hash', ['FONT_HASH_MISMATCH']],
+  ['font-path', ['FONT_PATH_INVALID', 'UNDECLARED_FONT']],
+  ['font-samples', ['FONT_MANIFEST_INVALID']],
+  ['font-glyph', ['FONT_GLYPH_MISSING']],
+  ['font-license', ['FONT_LICENSE_MISSING']],
+  ['font-license-swap', ['FONT_LICENSE_BINDING_MISMATCH']],
+  ['starter-copy', ['UNRESOLVED_PLACEHOLDER']],
+  ['output-hash', ['OUTPUT_HASH_MISMATCH']],
+  ['visual-review', ['VISUAL_REVIEW_STALE']],
+  ['css-font-url', ['UNDECLARED_FONT']],
+  ['invalid-transition', ['POSTER_STATE_INVALID', 'STATUS_NOT_FINAL']],
+  ['provider-authorization', ['POSTER_STATE_INVALID']],
+  ['publish-pending', ['PUBLISH_QA_INVALID']],
+  ['publish-all-na', ['PUBLISH_QA_INVALID']],
+  ['publish-qr-na', ['PUBLISH_QA_INVALID']],
+  ['publish-identity-na', ['PUBLISH_QA_INVALID']],
+  ['publish-logo-asset-na', ['PUBLISH_QA_INVALID']],
 ]) {
   test(`Release blocks ${scenario}`, async (context) => {
-    await assertReleaseBlocked(context, scenario, expectedCode);
+    await assertReleaseBlocked(context, scenario, expectedCodes);
   });
 }

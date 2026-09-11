@@ -59,6 +59,12 @@ const FONT_SPECS = [
   },
 ];
 
+const LICENSE = {
+  licenseId: 'OFL-1.1',
+  licenseName: 'SIL Open Font License',
+  licenseVersion: '1.1',
+};
+
 function parseArgs(argv) {
   if (argv.length !== 2 || argv[0] !== '--project' || !argv[1]) {
     throw new Error('Usage: node scripts/prepare-project.mjs --project PATH');
@@ -74,15 +80,26 @@ function relativePath(value) {
   return value.split(path.sep).join('/');
 }
 
-function licensesMarkdown(fonts) {
-  const sections = fonts.map((font, index) => [
-    `## ${font.family} (${font.samples.join(', ')})`,
+function licenseRecords(fonts) {
+  return fonts.map((font, index) => ({
+    family: font.family,
+    file: font.file,
+    sha256: font.sha256,
+    licenseFile: font.licenseFile,
+    ...LICENSE,
+    sourcePackage: FONT_SPECS[index].package,
+  }));
+}
+
+function licensesMarkdown(fonts, records) {
+  const sections = records.map((record, index) => [
+    `## ${record.family} (${fonts[index].samples.join(', ')})`,
     '',
-    `- Package: \`${FONT_SPECS[index].package}\``,
-    `- File: \`${font.file}\``,
-    `- SHA-256: \`${font.sha256}\``,
-    `- License: SIL Open Font License 1.1`,
-    `- License file: \`${font.licenseFile}\``,
+    `- Package: \`${record.sourcePackage}\``,
+    `- File: \`${record.file}\``,
+    `- SHA-256: \`${record.sha256}\``,
+    `- License: ${record.licenseName} ${record.licenseVersion} (\`${record.licenseId}\`)`,
+    `- License file: \`${record.licenseFile}\``,
   ].join('\n'));
   return `# Font and Asset Licenses\n\nGenerated from project-local pinned dependencies by \`npm run prepare\`.\n\n${sections.join('\n\n')}\n`;
 }
@@ -117,9 +134,13 @@ async function main() {
 
   const manifest = { version: 1, fonts };
   const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
+  const licenseManifest = { version: 1, records: licenseRecords(fonts) };
+  const licenseManifestText = `${JSON.stringify(licenseManifest, null, 2)}\n`;
   await writeFile(path.join(fontsDirectory, 'font-manifest.json'), manifestText);
   await writeFile(path.join(project, 'font-manifest.json'), manifestText);
-  await writeFile(path.join(project, 'licenses.md'), licensesMarkdown(fonts));
+  await writeFile(path.join(licensesDirectory, 'font-license-manifest.json'), licenseManifestText);
+  await writeFile(path.join(project, 'font-license-manifest.json'), licenseManifestText);
+  await writeFile(path.join(project, 'licenses.md'), licensesMarkdown(fonts, licenseManifest.records));
   process.stdout.write(`${JSON.stringify({ success: true, project, fonts: fonts.map(({ file }) => file) })}\n`);
 }
 

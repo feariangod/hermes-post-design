@@ -7,7 +7,7 @@ import jsQR from 'jsqr';
 import { PDFDocument } from 'pdf-lib';
 import { PNG } from 'pngjs';
 import { resolveExecutable } from './browser-paths.mjs';
-import { collectProjectSourceHashes, installProjectResourceBoundary, isFinalStatus, validateBrief, validateConfig, validateFontManifest, validatePosterState, validatePublishQa, validateStaticHtml } from './poster-contract.mjs';
+import { collectProjectSourceHashes, derivePublishQaApplicability, installProjectResourceBoundary, isFinalStatus, validateBrief, validateConfig, validateFontManifest, validatePosterState, validatePublishQa, validateStaticHtml } from './poster-contract.mjs';
 
 function parseArgs(argv) {
   const flags = new Set();
@@ -428,6 +428,8 @@ function runtimeFailure(stage, error) {
     BROWSER_STARTUP_FAILED: 'The browser context or page could not be initialized.',
     NAVIGATION_FAILED: 'The poster document could not be loaded.',
     FONT_LOAD_FAILED: 'Required bundled fonts could not be evaluated.',
+    FONT_VALIDATION_FAILED: 'Bundled font files or manifests could not be validated.',
+    PUBLISH_QA_VALIDATION_FAILED: 'Publish QA applicability could not be validated.',
     PAGE_EVALUATION_FAILED: 'The rendered poster could not be evaluated.',
     OUTPUT_INSPECTION_FAILED: 'Rendered output inspection could not be completed.',
   };
@@ -485,11 +487,6 @@ async function main() {
     const issues = validatePosterState(posterState);
     if (issues.length) blockers.push(finding('POSTER_STATE_INVALID', 'poster.json violates the workflow state contract.', { issues }));
   }
-  if (publishQa) {
-    const issues = validatePublishQa(publishQa);
-    if (issues.length) blockers.push(finding('PUBLISH_QA_INVALID', 'publish-qa.json violates the Publish QA contract.', { issues }));
-  }
-  if (strict && fontManifest) blockers.push(...await validateFontManifest(project, fontManifest));
   const outputPaths = {
     pngPath: await projectOutputPath(project, config.outputs?.png, 'poster.png'),
     mobilePath: await projectOutputPath(project, config.outputs?.mobile, 'poster-mobile.png'),
@@ -499,8 +496,10 @@ async function main() {
     throw new Error('PNG, mobile PNG, PDF, and QA report output paths must be unique.');
   }
   let browser;
-  let runtimeStage = 'BROWSER_RESOLUTION_FAILED';
+  let runtimeStage = 'FONT_VALIDATION_FAILED';
   try {
+    if (strict && fontManifest) blockers.push(...await validateFontManifest(project, fontManifest));
+    runtimeStage = 'BROWSER_RESOLUTION_FAILED';
     const viewport = viewportFor(config.canvas);
     const executablePath = await resolveExecutable(values.browser);
     const launchOptions = { headless: true };
@@ -645,8 +644,18 @@ async function main() {
         fonts: [...fonts],
         facts,
         qrCodes,
+        identityCount: document.querySelectorAll('[data-identity], [class*="identity" i], [id*="identity" i], [class*="portrait" i], [id*="portrait" i], [class*="speaker" i], [id*="speaker" i], img[alt*="portrait" i], img[alt*="speaker" i], img[src*="portrait" i], img[src*="speaker" i]').length,
+        logoCount: document.querySelectorAll('[data-logo], [class*="logo" i], [id*="logo" i], img[alt*="logo" i], img[src*="logo" i]').length,
+        qrCount: document.querySelectorAll('[data-qr], [class*="qr" i], [id*="qr" i], img[alt*="qr" i], img[src*="qr" i]').length,
       };
     });
+
+    runtimeStage = 'PUBLISH_QA_VALIDATION_FAILED';
+    if (publishQa) {
+      const applicability = await derivePublishQaApplicability(project, brief, result);
+      const issues = validatePublishQa(publishQa, applicability);
+      if (issues.length) blockers.push(finding('PUBLISH_QA_INVALID', 'publish-qa.json violates the mechanically derived Publish QA contract.', { issues, applicability }));
+    }
 
     const manifestFonts = Array.isArray(fontManifest?.fonts) ? fontManifest.fonts : [];
     const requiredFonts = manifestFonts.flatMap((font) =>

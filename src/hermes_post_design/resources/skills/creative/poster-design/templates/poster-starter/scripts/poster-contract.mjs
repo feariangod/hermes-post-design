@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as fontkit from 'fontkit';
 
 const MAX_CANVAS_DIMENSION_PX = 20_000;
 const MAX_CANVAS_AREA_PX = 100_000_000;
@@ -10,6 +11,19 @@ const POSTER_STATES = ['intake', 'route_selected', 'concept', 'visual_locked', '
 const MODE_MAX_STATE = { concept: 'visual_locked', publish: 'publish', release: 'release' };
 const PUBLISH_QA_FIELDS = ['size', 'facts', 'identity', 'logo', 'qr', 'mobile', 'artifacts'];
 const REQUIRED_FONT_FAMILIES = new Set(['Noto Sans SC', 'Noto Serif SC', 'Ma Shan Zheng']);
+const ALWAYS_APPLICABLE_PUBLISH_FIELDS = new Set(['size', 'facts', 'mobile', 'artifacts']);
+const FONT_LICENSE_SOURCES = {
+  'Ma Shan Zheng': '@fontsource/ma-shan-zheng@5.3.0',
+  'Noto Sans SC': '@fontsource-variable/noto-sans-sc@5.3.0',
+  'Noto Serif SC': '@fontsource-variable/noto-serif-sc@5.3.0',
+};
+const FONT_FAMILY_PREFIXES = {
+  'Ma Shan Zheng': ['Ma Shan Zheng'],
+  'Noto Sans SC': ['Noto Sans SC'],
+  'Noto Serif SC': ['Noto Serif SC'],
+};
+const FONT_STYLE_SUFFIX = /^(?:Thin|ExtraLight|Light|Regular|Medium|SemiBold|Bold|ExtraBold|Black)(?:Italic)?$/i;
+const LICENSE_RECORD_FIELDS = ['family', 'file', 'sha256', 'licenseFile', 'licenseId', 'licenseName', 'licenseVersion', 'sourcePackage'];
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -66,11 +80,11 @@ export function validatePosterState(value) {
   if (typeof provider.external !== 'boolean') issues.push('provider.external must be boolean');
   if (typeof provider.billed !== 'boolean') issues.push('provider.billed must be boolean');
   for (const counter of ['authorizedCalls', 'usedCalls']) {
-    if (!Number.isInteger(provider[counter]) || provider[counter] < 0) {
-      issues.push(`provider.${counter} must be a non-negative integer`);
+    if (!Number.isSafeInteger(provider[counter]) || provider[counter] < 0) {
+      issues.push(`provider.${counter} must be a non-negative safe integer`);
     }
   }
-  if (Number.isInteger(provider.usedCalls) && Number.isInteger(provider.authorizedCalls)
+  if (Number.isSafeInteger(provider.usedCalls) && Number.isSafeInteger(provider.authorizedCalls)
       && provider.usedCalls > provider.authorizedCalls) {
     issues.push('provider.usedCalls must not exceed authorizedCalls');
   }
@@ -84,7 +98,7 @@ export function validatePosterState(value) {
   return issues;
 }
 
-export function validatePublishQa(value) {
+export function validatePublishQa(value, applicability = {}) {
   const issues = [];
   if (!isObject(value)) return ['publish QA must be a JSON object'];
   if (value.version !== 1) issues.push('version must be 1');
@@ -93,7 +107,12 @@ export function validatePublishQa(value) {
     if (!['PENDING', 'PASS', 'FAIL', 'NOT_APPLICABLE'].includes(value[field])) {
       issues.push(`${field} must be PENDING, PASS, FAIL, or NOT_APPLICABLE`);
     }
-    if (value.status === 'PASS' && !['PASS', 'NOT_APPLICABLE'].includes(value[field])) {
+    const applicable = ALWAYS_APPLICABLE_PUBLISH_FIELDS.has(field) || applicability[field] === true;
+    if (value[field] === 'NOT_APPLICABLE' && applicable) {
+      issues.push(`${field} must be PASS because it is applicable`);
+    } else if (value.status === 'PASS' && applicable && value[field] !== 'PASS') {
+      issues.push(`${field} must be PASS because it is applicable`);
+    } else if (value.status === 'PASS' && !applicable && !['PASS', 'NOT_APPLICABLE'].includes(value[field])) {
       issues.push(`${field} must be PASS or NOT_APPLICABLE when status is PASS`);
     }
   }
@@ -226,6 +245,21 @@ function fontFinding(code, message, evidence = {}) {
   return { code, message, evidence };
 }
 
+function binaryNamesMatchFamily(family, binaryNames) {
+  const expected = family.replace(/[\s_-]+/g, '');
+  return binaryNames.some((name) => {
+    const normalized = name.replace(/[\s_-]+/g, '');
+    if (normalized === expected) return true;
+    return normalized.startsWith(expected) && FONT_STYLE_SUFFIX.test(normalized.slice(expected.length));
+  });
+}
+
+function exactLicenseRecord(record, expected) {
+  return isObject(record)
+    && Object.keys(record).sort().join('\0') === [...LICENSE_RECORD_FIELDS].sort().join('\0')
+    && LICENSE_RECORD_FIELDS.every((field) => record[field] === expected[field]);
+}
+
 function normalizeManifestPath(value, prefix) {
   if (typeof value !== 'string' || value.trim() === '' || value.includes('\\')) return null;
   const normalized = path.posix.normalize(value);
@@ -236,15 +270,19 @@ function normalizeManifestPath(value, prefix) {
 
 function cssFontFaces(css) {
   const faces = [];
+  const invalidSources = [];
   for (const match of css.matchAll(/@font-face\s*\{([\s\S]*?)\}/gi)) {
     const block = match[1];
     const familyMatch = block.match(/font-family\s*:\s*([^;]+);/i);
     const family = familyMatch?.[1]?.trim().replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, '$1$2') ?? null;
+    if (/\blocal\s*\(/i.test(block)) {
+      invalidSources.push({ family, source: block.match(/src\s*:\s*([^;]+)/i)?.[1] ?? null });
+    }
     for (const urlMatch of block.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) {
       faces.push({ family, file: urlMatch[1] });
     }
   }
-  return faces;
+  return { faces, invalidSources };
 }
 
 async function validateManifestFile(projectRealPath, relative, kind, missingCode, findings) {
@@ -285,7 +323,10 @@ export async function validateFontManifest(project, manifest) {
   } catch (error) {
     findings.push(fontFinding('SOURCE_MISSING', 'Font validation requires styles.css.', { error: error.code ?? error.message }));
   }
-  const faces = cssFontFaces(css);
+  const { faces, invalidSources } = cssFontFaces(css);
+  for (const source of invalidSources) {
+    findings.push(fontFinding('FONT_SOURCE_INVALID', 'Bundled font declarations must not use local() sources.', source));
+  }
   const declaredFiles = new Set();
   const families = new Set();
   const digestsByFamily = new Map();
@@ -315,7 +356,8 @@ export async function validateFontManifest(project, manifest) {
       if (!/^[0-9a-f]{64}$/.test(font.sha256 ?? '')) {
         findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Font SHA-256 must be a lowercase 64-character digest.', { index, path: fontFile, sha256: font.sha256 ?? null }));
       } else if (sourcePath) {
-        const actual = await sha256(sourcePath);
+        const buffer = await readFile(sourcePath);
+        const actual = createHash('sha256').update(buffer).digest('hex');
         if (actual !== font.sha256) {
           findings.push(fontFinding('FONT_HASH_MISMATCH', 'Font file SHA-256 does not match the manifest.', { path: fontFile, expected: font.sha256, actual }));
         }
@@ -326,6 +368,32 @@ export async function validateFontManifest(project, manifest) {
           } else {
             digestsByFamily.set(actual, family);
           }
+        }
+        try {
+          const parsed = fontkit.create(buffer);
+          const binaryNames = [parsed.familyName, parsed.fullName, parsed.postscriptName].filter(Boolean);
+          const validFamilies = FONT_FAMILY_PREFIXES[family] ?? [];
+          if (!validFamilies.some((validFamily) => binaryNamesMatchFamily(validFamily, binaryNames))) {
+            findings.push(fontFinding('FONT_BINARY_FAMILY_MISMATCH', 'Font binary identity does not match the declared family.', {
+              path: fontFile,
+              declaredFamily: family,
+              binaryNames,
+            }));
+          }
+          const missingCodePoints = [...new Set((Array.isArray(font.samples) ? font.samples : [])
+            .flatMap((sample) => [...sample])
+            .filter((character) => character.trim() !== '')
+            .map((character) => character.codePointAt(0))
+            .filter((codePoint) => !parsed.hasGlyphForCodePoint(codePoint)))];
+          if (missingCodePoints.length) {
+            findings.push(fontFinding('FONT_GLYPH_MISSING', 'Font binary does not cover every declared glyph sample.', {
+              path: fontFile,
+              family,
+              missingCodePoints,
+            }));
+          }
+        } catch (error) {
+          findings.push(fontFinding('FONT_BINARY_INVALID', 'Font binary could not be parsed.', { path: fontFile, error: error.message }));
         }
       }
       const matchingFaces = faces.filter((face) => face.file === fontFile);
@@ -360,19 +428,72 @@ export async function validateFontManifest(project, manifest) {
     findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Installed font manifest is missing or invalid.', { error: error.code ?? error.message }));
   }
 
+  let licenseManifest;
   try {
-    const licenses = await readFile(path.join(projectRealPath, 'licenses.md'), 'utf8');
-    for (const font of fonts.filter(isObject)) {
-      const missing = [font.family, font.file, font.sha256, font.licenseFile]
-        .filter((value) => typeof value === 'string' && !licenses.includes(value));
-      if (missing.length) {
-        findings.push(fontFinding('FONT_LICENSE_DECLARATION_MISSING', 'licenses.md is not bound to the current font declaration.', { path: font.file ?? null, missing }));
-      }
+    licenseManifest = JSON.parse(await readFile(path.join(projectRealPath, 'font-license-manifest.json'), 'utf8'));
+    const installed = JSON.parse(await readFile(path.join(projectRealPath, 'assets/licenses/font-license-manifest.json'), 'utf8'));
+    if (JSON.stringify(installed) !== JSON.stringify(licenseManifest)) {
+      findings.push(fontFinding('FONT_LICENSE_BINDING_MISMATCH', 'Root and installed font license manifests must match exactly.'));
     }
   } catch (error) {
-    findings.push(fontFinding('FONT_LICENSE_MISSING', 'Font license narrative is missing.', { path: 'licenses.md', error: error.code ?? error.message }));
+    findings.push(fontFinding('FONT_LICENSE_MISSING', 'Font license manifest is missing or invalid.', { error: error.code ?? error.message }));
   }
+  if (licenseManifest) {
+    const records = Array.isArray(licenseManifest.records) ? licenseManifest.records : [];
+    if (licenseManifest.version !== 1 || records.length !== fonts.length) {
+      findings.push(fontFinding('FONT_LICENSE_BINDING_MISMATCH', 'Font license manifest shape or record count is invalid.'));
+    }
+    for (const font of fonts.filter(isObject)) {
+      const expected = {
+        family: font.family,
+        file: font.file,
+        sha256: font.sha256,
+        licenseFile: font.licenseFile,
+        licenseId: 'OFL-1.1',
+        licenseName: 'SIL Open Font License',
+        licenseVersion: '1.1',
+        sourcePackage: FONT_LICENSE_SOURCES[font.family] ?? null,
+      };
+      const exactMatches = records.filter((record) => exactLicenseRecord(record, expected));
+      if (exactMatches.length !== 1) {
+        findings.push(fontFinding('FONT_LICENSE_BINDING_MISMATCH', 'Font entry must have one exact structured license record.', { expected, matches: exactMatches.length }));
+      }
+    }
+  }
+  await validateManifestFile(projectRealPath, 'licenses.md', 'Font license narrative', 'FONT_LICENSE_MISSING', findings);
   return findings;
+}
+
+export async function derivePublishQaApplicability(project, brief, dom = {}) {
+  const assetPaths = [];
+  async function walk(relativeDirectory) {
+    const directory = path.join(project, relativeDirectory);
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return;
+      throw error;
+    }
+    for (const entry of entries) {
+      const relative = path.join(relativeDirectory, entry.name);
+      if (entry.isDirectory()) await walk(relative);
+      else if (entry.isFile()) assetPaths.push(relative.split(path.sep).join('/'));
+    }
+  }
+  await walk('assets');
+  const roles = new Set((Array.isArray(brief?.assets) ? brief.assets : [])
+    .map((asset) => typeof asset?.role === 'string' ? asset.role.toLowerCase() : ''));
+  const hasAsset = (pattern) => assetPaths.some((assetPath) => pattern.test(assetPath));
+  return {
+    size: true,
+    facts: true,
+    mobile: true,
+    artifacts: true,
+    identity: Number(dom.identityCount) > 0 || roles.has('identity') || roles.has('person') || hasAsset(/\/(?:identity|identities|people|portraits?)(?:\/|[._-])/i),
+    logo: Number(dom.logoCount) > 0 || roles.has('logo') || roles.has('brand') || hasAsset(/\/(?:logos?|brandmarks?|marks?)(?:\/|[._-])/i),
+    qr: Number(dom.qrCount) > 0 || (Array.isArray(brief?.qrCodes) && brief.qrCodes.length > 0) || roles.has('qr') || hasAsset(/\/(?:qr|qrcodes?)(?:\/|[._-])/i),
+  };
 }
 
 export async function installProjectResourceBoundary(context, project) {
