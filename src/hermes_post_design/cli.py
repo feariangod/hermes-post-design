@@ -11,6 +11,7 @@ import requests
 
 from hermes_post_design.chiyi_core import ChiyiClient
 from hermes_post_design.chiyi_core.models import EditRequest, GenerateRequest, ImageSource
+from hermes_post_design.install import apply_install, plan_install
 from hermes_post_design.sync import apply_sync, plan_sync, restore_backup
 
 
@@ -121,6 +122,16 @@ def _command_sync(args) -> int:
     return 0
 
 
+def _command_install_skill(args) -> int:
+    payload = apply_install(args.target, args.home) if args.apply else {
+        "changed": False,
+        "dry_run": True,
+        "entries": [entry.__dict__ for entry in plan_install(args.target, args.home)],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2 if not args.json else None, sort_keys=True))
+    return 0
+
+
 def _command_restore(args) -> int:
     payload = restore_backup(args.hermes_home, args.backup)
     print(json.dumps(payload, ensure_ascii=False, indent=2 if not args.json else None, sort_keys=True))
@@ -157,6 +168,13 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run")
     sync.add_argument("--json", action="store_true")
     sync.set_defaults(handler=_command_sync)
+
+    install_skill = sub.add_parser("install-skill", help="Preview or install the poster skill for one host")
+    install_skill.add_argument("--target", choices=("agents", "codex", "claude", "hermes"), required=True)
+    install_skill.add_argument("--home", type=Path)
+    install_skill.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run")
+    install_skill.add_argument("--json", action="store_true")
+    install_skill.set_defaults(handler=_command_install_skill)
 
     restore = sub.add_parser("restore", help="Restore a backup created by sync")
     restore.add_argument("--hermes-home", type=Path, required=True)

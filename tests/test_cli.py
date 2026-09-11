@@ -27,6 +27,21 @@ def test_sync_defaults_to_dry_run_and_apply_writes(tmp_path, capsys):
     assert (home / "plugins/image_gen/chiyi/provider.py").is_file()
 
 
+def test_install_skill_defaults_to_dry_run_and_applies_only_selected_target(tmp_path, capsys):
+    home = tmp_path / "codex"
+
+    assert cli.main(["install-skill", "--target", "codex", "--home", str(home), "--json"]) == 0
+    dry = json.loads(capsys.readouterr().out)
+    assert dry["dry_run"] is True
+    assert not home.exists()
+
+    assert cli.main(["install-skill", "--target", "codex", "--home", str(home), "--apply", "--json"]) == 0
+    applied = json.loads(capsys.readouterr().out)
+    assert applied["changed"] is True
+    assert (home / "skills/poster-design/SKILL.md").is_file()
+    assert not (home / "plugins").exists()
+
+
 def test_generate_without_key_is_structured_and_does_not_echo_environment(monkeypatch, capsys, tmp_path):
     monkeypatch.delenv("CHIYI_IMAGE_API_KEY", raising=False)
     exit_code = cli.main(["generate", "poster", "--output-dir", str(tmp_path), "--json"])
