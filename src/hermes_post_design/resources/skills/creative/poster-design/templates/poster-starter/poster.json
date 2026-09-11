@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "mode": "publish",
+  "state": "intake",
+  "conceptRevision": 0,
+  "direction": null,
+  "approvedCopy": [],
+  "provider": {
+    "adapter": "deterministic-local",
+    "external": false,
+    "billed": false,
+    "authorizedCalls": 0,
+    "usedCalls": 0
+  }
+}

@@ -1,6 +1,8 @@
 {
   "title": "Poster",
   "status": "preview",
+  "mode": "publish",
+  "state": "intake",
   "canvas": {
     "type": "digital",
     "width": 1080,

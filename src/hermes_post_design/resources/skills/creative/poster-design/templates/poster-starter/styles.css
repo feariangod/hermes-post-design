@@ -5,7 +5,15 @@
 
 @font-face {
   font-family: "Noto Sans SC";
-  src: url("assets/fonts/NotoSansSC-VF.ttf") format("truetype");
+  src: url("assets/fonts/NotoSansSC-ChineseSubset.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  src: url("assets/fonts/NotoSansSC-Latin.woff2") format("woff2");
   font-style: normal;
   font-weight: 100 900;
   font-display: block;
@@ -13,7 +21,15 @@
 
 @font-face {
   font-family: "Noto Serif SC";
-  src: url("assets/fonts/NotoSerifSC-VF.ttf") format("truetype");
+  src: url("assets/fonts/NotoSerifSC-ChineseSubset.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Noto Serif SC";
+  src: url("assets/fonts/NotoSerifSC-Latin.woff2") format("woff2");
   font-style: normal;
   font-weight: 200 900;
   font-display: block;
@@ -21,7 +37,7 @@
 
 @font-face {
   font-family: "Ma Shan Zheng";
-  src: url("assets/fonts/MaShanZheng-Latin.woff2") format("woff2");
+  src: url("assets/fonts/MaShanZheng-Chinese.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: block;
@@ -29,7 +45,7 @@
 
 @font-face {
   font-family: "Ma Shan Zheng";
-  src: url("assets/fonts/MaShanZheng-SC.woff2") format("woff2");
+  src: url("assets/fonts/MaShanZheng-Latin.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: block;

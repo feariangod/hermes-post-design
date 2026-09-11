@@ -19,6 +19,13 @@ FORBIDDEN_PARTS = {
 }
 FORBIDDEN_NAMES = {"auth.json", "config.yaml", "qa-report.json", "render-result.json", "visual-review.json"}
 FORBIDDEN_SUFFIXES = (".db", ".log", ".pdf", ".png", ".sqlite", ".sqlite3")
+REQUIRED_POSTER_RESOURCES = (
+    "resources/skills/creative/poster-design/scripts/prepare-project.mjs",
+    "resources/skills/creative/poster-design/templates/poster-starter/font-manifest.json",
+    "resources/skills/creative/poster-design/templates/poster-starter/package-lock.json",
+    "resources/skills/creative/poster-design/templates/poster-starter/poster.json",
+    "resources/skills/creative/poster-design/templates/poster-starter/publish-qa.json",
+)
 
 
 def assert_clean_entries(names):
@@ -32,6 +39,8 @@ def assert_clean_entries(names):
             assert Path(name).name.lower() not in FORBIDDEN_NAMES, name
             assert not name.lower().endswith(FORBIDDEN_SUFFIXES), name
             assert _should_include_resource(relative_parts), name
+    for suffix in REQUIRED_POSTER_RESOURCES:
+        assert any(name.endswith(suffix) for name in names), suffix
 
 
 def _project_root() -> Path:

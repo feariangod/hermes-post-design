@@ -5,6 +5,7 @@
   "scripts": {
     "runtime:sync": "node scripts/sync-runtime.mjs",
     "runtime:check": "node scripts/sync-runtime.mjs --check",
+    "prepare": "node scripts/prepare-project.mjs --project .",
     "test": "npm run runtime:check"
   },
   "dependencies": {

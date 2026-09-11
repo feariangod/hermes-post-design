@@ -3,12 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare": "node scripts/prepare-project.mjs --project .",
     "render": "node scripts/render-poster.mjs --project .",
     "inspect": "node scripts/inspect-poster.mjs --project . --strict",
     "visual:record": "node scripts/record-visual-review.mjs --project .",
     "inspect:final": "node scripts/inspect-poster.mjs --project . --final"
   },
   "dependencies": {
+    "@fontsource-variable/noto-sans-sc": "5.3.0",
+    "@fontsource-variable/noto-serif-sc": "5.3.0",
+    "@fontsource/ma-shan-zheng": "5.3.0",
     "jsqr": "1.4.0",
     "pdf-lib": "1.17.1",
     "playwright": "1.62.1",
