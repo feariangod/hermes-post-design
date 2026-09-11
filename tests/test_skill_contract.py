@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,19 @@ def _read_value(value: str):
     return value.strip('"')
 
 
+def _contains_unconditional_image_generate_instruction(body: str) -> bool:
+    for sentence in re.split(r"(?<=[.!?])\s+", body):
+        if "image_generate" not in sentence:
+            continue
+        if not re.search(
+            r"(?:after|with|once|when) explicit authorization",
+            sentence,
+            re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
 @pytest.fixture
 def skill_root() -> Path:
     return (
@@ -62,16 +76,39 @@ def test_skill_frontmatter_uses_common_schema(skill_root):
 def test_entrypoint_routes_every_reference(skill_root):
     body = (skill_root / "SKILL.md").read_text(encoding="utf-8")
     for reference in (skill_root / "references").glob("*.md"):
-        assert f"references/{reference.name}" in body
+        route_lines = [
+            line
+            for line in body.splitlines()
+            if f"references/{reference.name}" in line
+        ]
+        assert route_lines
+        assert any(
+            re.search(r"\bread\b", line, re.IGNORECASE)
+            and re.search(r"\b(before|when)\b", line, re.IGNORECASE)
+            for line in route_lines
+        )
 
 
 def test_entrypoint_does_not_unconditionally_call_an_image_tool(skill_root):
     body = (skill_root / "SKILL.md").read_text(encoding="utf-8")
-    assert "image_generate" not in body
+    assert not _contains_unconditional_image_generate_instruction(body)
+    assert not _contains_unconditional_image_generate_instruction(
+        "After explicit authorization, call `image_generate` once."
+    )
+    assert _contains_unconditional_image_generate_instruction(
+        "Call `image_generate` once."
+    )
 
 
 def test_host_adapter_requires_authorization_and_fallback(skill_root):
     adapter = (skill_root / "references/host-adapters.md").read_text(encoding="utf-8")
-    assert "billed" in adapter
-    assert "authorization" in adapter
-    assert "deterministic local" in adapter
+    assert """authorized compatible image tool -> image-led concept
+available but billed/external and not authorized -> request authorization once
+declined, missing, or incompatible image tool -> deterministic local concept
+ambiguous network failure -> stop; do not retry without fresh authorization""" in adapter
+    assert "Ask once for explicit authorization." in adapter
+    assert (
+        "If authorization is declined, unavailable, or no compatible image capability "
+        "exists, continue with the deterministic local route."
+    ) in adapter
+    assert "Do not retry, fail over to another external capability" in adapter

@@ -15,7 +15,7 @@ Create a poster whose visual direction, readable copy, assets, and delivery clai
 ## Route
 
 1. Read [host-adapters.md](references/host-adapters.md) before selecting an image-led or deterministic-local route, or before any external operation.
-2. Read [intake.md](references/intake.md) to collect the smallest brief that changes the route, visual direction, or factual responsibility.
+2. Before gathering the brief, read [intake.md](references/intake.md) to collect only what changes the route, visual direction, or factual responsibility.
 3. When no visual direction is explicit, read [concept-directions.md](references/concept-directions.md) and present two or three text-only directions before creating a concept.
 4. Before using identity-bearing, branded, product, QR, or reference assets, read [asset-policy.md](references/asset-policy.md).
 5. Before placing or accepting readable text, read [typography.md](references/typography.md).
