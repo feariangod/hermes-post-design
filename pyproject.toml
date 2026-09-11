@@ -30,6 +30,54 @@ include-package-data = true
 [tool.setuptools.package-data]
 hermes_post_design = ["resources/**/*"]
 
+[tool.setuptools.exclude-package-data]
+"*" = [
+    "resources/**/.agents/**",
+    "resources/**/.claude/**",
+    "resources/**/.codex/**",
+    "resources/**/.coverage",
+    "resources/**/.eggs/**",
+    "resources/**/.env",
+    "resources/**/.env.*",
+    "resources/**/.hermes/**",
+    "resources/**/.mypy_cache/**",
+    "resources/**/.npmrc",
+    "resources/**/.pypirc",
+    "resources/**/.pytest_cache/**",
+    "resources/**/.ruff_cache/**",
+    "resources/**/.venv/**",
+    "resources/**/__pycache__/**",
+    "resources/**/__pypackages__/**",
+    "resources/**/artifacts/**",
+    "resources/**/backups/**",
+    "resources/**/build/**",
+    "resources/**/coverage/**",
+    "resources/**/coverage.xml",
+    "resources/**/credentials/**",
+    "resources/**/credentials.json",
+    "resources/**/dist/**",
+    "resources/**/htmlcov/**",
+    "resources/**/logs/**",
+    "resources/**/node_modules/**",
+    "resources/**/reports/**",
+    "resources/**/secrets/**",
+    "resources/**/state/**",
+    "resources/**/temp/**",
+    "resources/**/tmp/**",
+    "resources/**/venv/**",
+    "resources/**/*.avi",
+    "resources/**/*.gif",
+    "resources/**/*.jpeg",
+    "resources/**/*.jpg",
+    "resources/**/*.log",
+    "resources/**/*.mov",
+    "resources/**/*.mp4",
+    "resources/**/*.pdf",
+    "resources/**/*.png",
+    "resources/**/*.tmp",
+    "resources/**/*.webp",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

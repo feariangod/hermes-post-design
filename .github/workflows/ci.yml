@@ -49,7 +49,11 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import sys
           from zipfile import ZipFile
+
+          sys.path.insert(0, str(Path("src").resolve()))
+          from hermes_post_design.install import _should_include_resource
 
           wheel = next(Path("dist").glob("*.whl"))
           with ZipFile(wheel) as archive:
@@ -61,4 +65,12 @@ jobs:
           ]
           for suffix in required:
               assert any(name.endswith(suffix) for name in names), suffix
+          forbidden_parts = {"node_modules", "__pycache__", ".pytest_cache", "coverage", "artifacts"}
+          for name in names:
+              parts = Path(name).parts
+              assert not set(parts) & forbidden_parts, name
+              assert not name.lower().endswith((".png", ".pdf", ".log")), name
+              if "resources" in parts:
+                  relative_parts = parts[parts.index("resources") + 1:]
+                  assert _should_include_resource(relative_parts), name
           PY

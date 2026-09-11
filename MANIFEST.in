@@ -1,0 +1,45 @@
+prune src/hermes_post_design/resources/skills/creative/poster-design/node_modules
+recursive-exclude src/hermes_post_design/resources .agents/*
+recursive-exclude src/hermes_post_design/resources .claude/*
+recursive-exclude src/hermes_post_design/resources .codex/*
+recursive-exclude src/hermes_post_design/resources .eggs/*
+recursive-exclude src/hermes_post_design/resources .hermes/*
+recursive-exclude src/hermes_post_design/resources .mypy_cache/*
+recursive-exclude src/hermes_post_design/resources .pytest_cache/*
+recursive-exclude src/hermes_post_design/resources .ruff_cache/*
+recursive-exclude src/hermes_post_design/resources .venv/*
+recursive-exclude src/hermes_post_design/resources __pycache__/*
+recursive-exclude src/hermes_post_design/resources __pypackages__/*
+recursive-exclude src/hermes_post_design/resources artifacts/*
+recursive-exclude src/hermes_post_design/resources backups/*
+recursive-exclude src/hermes_post_design/resources build/*
+recursive-exclude src/hermes_post_design/resources coverage/*
+recursive-exclude src/hermes_post_design/resources credentials/*
+recursive-exclude src/hermes_post_design/resources dist/*
+recursive-exclude src/hermes_post_design/resources htmlcov/*
+recursive-exclude src/hermes_post_design/resources logs/*
+recursive-exclude src/hermes_post_design/resources reports/*
+recursive-exclude src/hermes_post_design/resources secrets/*
+recursive-exclude src/hermes_post_design/resources state/*
+recursive-exclude src/hermes_post_design/resources temp/*
+recursive-exclude src/hermes_post_design/resources tmp/*
+recursive-exclude src/hermes_post_design/resources venv/*
+recursive-exclude src/hermes_post_design/resources *.avi
+recursive-exclude src/hermes_post_design/resources *.gif
+recursive-exclude src/hermes_post_design/resources *.jpeg
+recursive-exclude src/hermes_post_design/resources *.jpg
+recursive-exclude src/hermes_post_design/resources *.log
+recursive-exclude src/hermes_post_design/resources *.mov
+recursive-exclude src/hermes_post_design/resources *.mp4
+recursive-exclude src/hermes_post_design/resources *.pdf
+recursive-exclude src/hermes_post_design/resources *.png
+recursive-exclude src/hermes_post_design/resources *.tmp
+recursive-exclude src/hermes_post_design/resources *.webp
+exclude src/hermes_post_design/resources/**/.coverage
+exclude src/hermes_post_design/resources/**/.env
+exclude src/hermes_post_design/resources/**/.env.*
+exclude src/hermes_post_design/resources/**/.npmrc
+exclude src/hermes_post_design/resources/**/.pypirc
+exclude src/hermes_post_design/resources/**/coverage.xml
+exclude src/hermes_post_design/resources/**/credentials.json
+exclude src/hermes_post_design/resources/**/last-install.json

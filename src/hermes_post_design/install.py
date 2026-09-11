@@ -36,6 +36,57 @@ _TARGET_LAYOUTS = MappingProxyType({
 
 _BACKUP_DIRECTORY = "hermes-post-design"
 
+_EXCLUDED_RESOURCE_PARTS = frozenset({
+    ".agents",
+    ".claude",
+    ".codex",
+    ".eggs",
+    ".hermes",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "__pypackages__",
+    "artifacts",
+    "backups",
+    "build",
+    "coverage",
+    "credentials",
+    "dist",
+    "htmlcov",
+    "logs",
+    "node_modules",
+    "reports",
+    "secrets",
+    "state",
+    "temp",
+    "tmp",
+    "venv",
+})
+_EXCLUDED_RESOURCE_NAMES = frozenset({
+    ".coverage",
+    ".env",
+    ".npmrc",
+    ".pypirc",
+    "coverage.xml",
+    "credentials.json",
+    "last-install.json",
+})
+_GENERATED_MEDIA_SUFFIXES = frozenset({
+    ".avi",
+    ".gif",
+    ".jpeg",
+    ".jpg",
+    ".log",
+    ".mov",
+    ".mp4",
+    ".pdf",
+    ".png",
+    ".tmp",
+    ".webp",
+})
+
 
 def _resource_root():
     return resources.files("hermes_post_design").joinpath("resources")
@@ -79,14 +130,39 @@ def _managed_target(home: Path, relative: str, home_label: str) -> Path:
     return target
 
 
+def _should_include_resource(relative_parts: tuple[str, ...]) -> bool:
+    """Return whether a resource path belongs in an installation or wheel."""
+    if not relative_parts:
+        return False
+    lowered = tuple(part.lower() for part in relative_parts)
+    name = lowered[-1]
+    if any(part in _EXCLUDED_RESOURCE_PARTS for part in lowered):
+        return False
+    if name in _EXCLUDED_RESOURCE_NAMES or name.startswith(".env."):
+        return False
+    return not any(name.endswith(suffix) for suffix in _GENERATED_MEDIA_SUFFIXES)
+
+
+def _iter_included_resources(node, relative_parts: tuple[str, ...] = ()):
+    for child in sorted(node.iterdir(), key=lambda item: item.name):
+        child_parts = relative_parts + (child.name,)
+        if not _should_include_resource(child_parts):
+            continue
+        if child.is_dir():
+            yield child, child_parts, True
+            yield from _iter_included_resources(child, child_parts)
+        elif child.is_file():
+            yield child, child_parts, False
+
+
 def _tree_digest(node) -> str:
     digest = hashlib.sha256()
-    for child in sorted(node.iterdir(), key=lambda item: item.name):
-        if child.is_dir():
-            digest.update(b"D\0" + child.name.encode("utf-8") + b"\0")
-            digest.update(_tree_digest(child).encode("ascii"))
+    for child, relative_parts, is_directory in _iter_included_resources(node):
+        relative = "/".join(relative_parts).encode("utf-8")
+        if is_directory:
+            digest.update(b"D\0" + relative + b"\0")
         else:
-            digest.update(b"F\0" + child.name.encode("utf-8") + b"\0")
+            digest.update(b"F\0" + relative + b"\0")
             digest.update(child.read_bytes())
     return digest.hexdigest()
 
@@ -95,34 +171,42 @@ def _path_digest(path: Path) -> str | None:
     if not path.exists() or not path.is_dir():
         return None
 
-    def digest_dir(directory: Path) -> str | None:
-        digest = hashlib.sha256()
+    def plain_entries(directory: Path, relative_parts: tuple[str, ...] = ()):
         for child in sorted(directory.iterdir(), key=lambda item: item.name):
             if child.is_symlink():
-                return None
+                raise ValueError
+            child_parts = relative_parts + (child.name,)
             if child.is_dir():
-                nested = digest_dir(child)
-                if nested is None:
-                    return None
-                digest.update(b"D\0" + child.name.encode("utf-8") + b"\0")
-                digest.update(nested.encode("ascii"))
+                yield child, child_parts, True
+                yield from plain_entries(child, child_parts)
             elif child.is_file():
-                digest.update(b"F\0" + child.name.encode("utf-8") + b"\0")
-                digest.update(child.read_bytes())
+                yield child, child_parts, False
             else:
-                return None
-        return digest.hexdigest()
+                raise ValueError
 
-    return digest_dir(path)
+    digest = hashlib.sha256()
+    try:
+        entries = plain_entries(path)
+        for child, relative_parts, is_directory in entries:
+            relative = "/".join(relative_parts).encode("utf-8")
+            if is_directory:
+                digest.update(b"D\0" + relative + b"\0")
+            else:
+                digest.update(b"F\0" + relative + b"\0")
+                digest.update(child.read_bytes())
+    except ValueError:
+        return None
+    return digest.hexdigest()
 
 
 def _copy_resource_tree(source, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
-    for child in source.iterdir():
-        target = destination / child.name
-        if child.is_dir():
-            _copy_resource_tree(child, target)
+    for child, relative_parts, is_directory in _iter_included_resources(source):
+        target = destination.joinpath(*relative_parts)
+        if is_directory:
+            target.mkdir(parents=True, exist_ok=True)
         else:
+            target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(child.read_bytes())
 
 

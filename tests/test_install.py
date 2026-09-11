@@ -91,6 +91,53 @@ def test_apply_install_replaces_only_managed_target_and_restore_recovers_it(tmp_
     assert (unrelated / "keep.txt").read_text(encoding="utf-8") == "unchanged"
 
 
+def test_install_excludes_development_dependencies(tmp_path, monkeypatch):
+    import hermes_post_design.install as install_module
+
+    resource_root = tmp_path / "resources"
+    source = resource_root / "skills/creative/poster-design"
+    (source / "templates").mkdir(parents=True)
+    (source / "SKILL.md").write_text("canonical skill", encoding="utf-8")
+    (source / "templates/brief.md").write_text("canonical template", encoding="utf-8")
+    (source / "node_modules/example/index.js").mkdir(parents=True)
+    (source / "node_modules/example/index.js/package.json").write_text("{}", encoding="utf-8")
+    (source / "__pycache__/install.cpython-313.pyc").mkdir(parents=True)
+    (source / "__pycache__/install.cpython-313.pyc/cache.pyc").write_bytes(b"cache")
+    (source / ".pytest_cache/state").mkdir(parents=True)
+    (source / ".pytest_cache/state/lastfailed").write_text("{}", encoding="utf-8")
+    (source / "coverage/html/index.html").mkdir(parents=True)
+    (source / "coverage/html/index.html/report.html").write_text("report", encoding="utf-8")
+    (source / "artifacts/render.png").mkdir(parents=True)
+    (source / "artifacts/render.png/poster.png").write_bytes(b"png")
+    (source / "reports/run.log").mkdir(parents=True)
+    (source / "reports/run.log/render.log").write_text("log", encoding="utf-8")
+    (source / ".env").write_text("SECRET=not-packaged", encoding="utf-8")
+    (source / "state/last-install.json").mkdir(parents=True)
+    (source / "state/last-install.json/host.json").write_text("state", encoding="utf-8")
+    monkeypatch.setattr(install_module, "_resource_root", lambda: resource_root)
+
+    result = apply_install("codex", tmp_path / "codex")
+    installed = tmp_path / "codex/skills/poster-design"
+
+    assert result["changed"] is True
+    assert (installed / "SKILL.md").is_file()
+    assert (installed / "templates/brief.md").is_file()
+    assert not any(
+        (installed / excluded).exists()
+        for excluded in (
+            "node_modules",
+            "__pycache__",
+            ".pytest_cache",
+            "coverage",
+            "artifacts",
+            "reports",
+            ".env",
+            "state",
+        )
+    )
+    assert plan_install("codex", tmp_path / "codex")[0].action == "unchanged"
+
+
 def test_apply_install_rolls_back_replacements_when_a_switch_fails(tmp_path, monkeypatch):
     import hermes_post_design.install as install_module
 
