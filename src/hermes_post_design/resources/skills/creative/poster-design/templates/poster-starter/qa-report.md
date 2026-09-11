@@ -16,6 +16,13 @@
 | Fact | Expected | Rendered | Result |
 |---|---|---|---|
 
+## Stage Contract Evidence
+
+- `poster.json` mode and state:
+- Provider authorization budget and usage:
+- `publish-qa.json` status:
+- Font manifest paths, hashes, families, samples, and licenses:
+
 ## Layout Evidence
 
 - Target canvas:

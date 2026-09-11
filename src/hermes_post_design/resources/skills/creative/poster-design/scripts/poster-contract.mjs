@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 const MAX_CANVAS_DIMENSION_PX = 20_000;
 const MAX_CANVAS_AREA_PX = 100_000_000;
 const MAX_PRINT_DIMENSION_MM = 2_000;
+const POSTER_STATES = ['intake', 'route_selected', 'concept', 'visual_locked', 'publish', 'release'];
+const MODE_MAX_STATE = { concept: 'visual_locked', publish: 'publish', release: 'release' };
+const PUBLISH_QA_FIELDS = ['size', 'facts', 'identity', 'logo', 'qr', 'mobile', 'artifacts'];
+const REQUIRED_FONT_FAMILIES = new Set(['Noto Sans SC', 'Noto Serif SC', 'Ma Shan Zheng']);
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -21,6 +25,82 @@ function isPositiveFinite(value) {
 
 export function isFinalStatus(value) {
   return typeof value === 'string' && value.trim() === 'final';
+}
+
+export function validatePosterState(value) {
+  const issues = [];
+  if (!isObject(value)) return ['poster state must be a JSON object'];
+  if (value.version !== 1) issues.push('version must be 1');
+  if (!Object.hasOwn(MODE_MAX_STATE, value.mode)) {
+    issues.push('mode must be concept, publish, or release');
+  }
+  if (![...POSTER_STATES, 'needs_rebrief'].includes(value.state)) {
+    issues.push('state must be intake, route_selected, concept, visual_locked, publish, release, or needs_rebrief');
+  } else if (value.state !== 'needs_rebrief' && Object.hasOwn(MODE_MAX_STATE, value.mode)) {
+    const maximum = POSTER_STATES.indexOf(MODE_MAX_STATE[value.mode]);
+    if (POSTER_STATES.indexOf(value.state) > maximum) {
+      issues.push(`mode ${value.mode} cannot reach state ${value.state}`);
+    }
+  }
+  if (!Number.isInteger(value.conceptRevision) || value.conceptRevision < 0 || value.conceptRevision > 1) {
+    issues.push('conceptRevision must be 0 or 1');
+  }
+  if (value.state === 'needs_rebrief' && value.conceptRevision !== 1) {
+    issues.push('needs_rebrief requires conceptRevision 1 after the direction revision is exhausted');
+  }
+  if (value.direction !== null && (typeof value.direction !== 'string' || value.direction.trim() === '')) {
+    issues.push('direction must be null or a non-empty string');
+  }
+  if (['concept', 'visual_locked', 'publish', 'release'].includes(value.state)
+      && (typeof value.direction !== 'string' || value.direction.trim() === '')) {
+    issues.push(`${value.state} state requires a selected direction`);
+  }
+  if (!Array.isArray(value.approvedCopy)
+      || value.approvedCopy.some((entry) => typeof entry !== 'string' || entry.trim() === '')) {
+    issues.push('approvedCopy must be an array of non-empty strings');
+  }
+
+  const provider = value.provider;
+  if (!isObject(provider)) return [...issues, 'provider must be an object'];
+  if (typeof provider.adapter !== 'string' || provider.adapter.trim() === '') issues.push('provider.adapter must be a non-empty string');
+  if (typeof provider.external !== 'boolean') issues.push('provider.external must be boolean');
+  if (typeof provider.billed !== 'boolean') issues.push('provider.billed must be boolean');
+  for (const counter of ['authorizedCalls', 'usedCalls']) {
+    if (!Number.isInteger(provider[counter]) || provider[counter] < 0) {
+      issues.push(`provider.${counter} must be a non-negative integer`);
+    }
+  }
+  if (Number.isInteger(provider.usedCalls) && Number.isInteger(provider.authorizedCalls)
+      && provider.usedCalls > provider.authorizedCalls) {
+    issues.push('provider.usedCalls must not exceed authorizedCalls');
+  }
+  if ((provider.external === true || provider.billed === true)
+      && (!Number.isInteger(provider.authorizedCalls) || provider.authorizedCalls < 1)) {
+    issues.push('an external or billed provider requires at least one authorized call');
+  }
+  if (provider.adapter === 'deterministic-local' && (provider.external === true || provider.billed === true)) {
+    issues.push('deterministic-local provider must not be external or billed');
+  }
+  return issues;
+}
+
+export function validatePublishQa(value) {
+  const issues = [];
+  if (!isObject(value)) return ['publish QA must be a JSON object'];
+  if (value.version !== 1) issues.push('version must be 1');
+  if (!['PENDING', 'PASS', 'FAIL'].includes(value.status)) issues.push('status must be PENDING, PASS, or FAIL');
+  for (const field of PUBLISH_QA_FIELDS) {
+    if (!['PENDING', 'PASS', 'FAIL', 'NOT_APPLICABLE'].includes(value[field])) {
+      issues.push(`${field} must be PENDING, PASS, FAIL, or NOT_APPLICABLE`);
+    }
+    if (value.status === 'PASS' && !['PASS', 'NOT_APPLICABLE'].includes(value[field])) {
+      issues.push(`${field} must be PASS or NOT_APPLICABLE when status is PASS`);
+    }
+  }
+  if (value.status === 'FAIL' && !PUBLISH_QA_FIELDS.some((field) => value[field] === 'FAIL')) {
+    issues.push('status FAIL requires at least one failed field');
+  }
+  return issues;
 }
 
 export function validateConfig(config) {
@@ -140,6 +220,159 @@ export function validateStaticHtml(html) {
 function isInside(root, candidate) {
   const relative = path.relative(root, candidate);
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+function fontFinding(code, message, evidence = {}) {
+  return { code, message, evidence };
+}
+
+function normalizeManifestPath(value, prefix) {
+  if (typeof value !== 'string' || value.trim() === '' || value.includes('\\')) return null;
+  const normalized = path.posix.normalize(value);
+  if (normalized !== value || path.posix.isAbsolute(value) || normalized === '..' || normalized.startsWith('../')) return null;
+  if (!normalized.startsWith(prefix) || normalized === prefix.slice(0, -1)) return null;
+  return normalized;
+}
+
+function cssFontFaces(css) {
+  const faces = [];
+  for (const match of css.matchAll(/@font-face\s*\{([\s\S]*?)\}/gi)) {
+    const block = match[1];
+    const familyMatch = block.match(/font-family\s*:\s*([^;]+);/i);
+    const family = familyMatch?.[1]?.trim().replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, '$1$2') ?? null;
+    for (const urlMatch of block.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) {
+      faces.push({ family, file: urlMatch[1] });
+    }
+  }
+  return faces;
+}
+
+async function validateManifestFile(projectRealPath, relative, kind, missingCode, findings) {
+  const sourcePath = path.join(projectRealPath, relative);
+  try {
+    const details = await lstat(sourcePath);
+    if (details.isSymbolicLink() || !details.isFile()) {
+      findings.push(fontFinding('FONT_PATH_INVALID', `${kind} must be a regular project file without symbolic links.`, { path: relative }));
+      return null;
+    }
+    const resolved = await realpath(sourcePath);
+    if (!isInside(projectRealPath, resolved)) {
+      findings.push(fontFinding('FONT_PATH_INVALID', `${kind} must stay inside the project.`, { path: relative, resolved }));
+      return null;
+    }
+    return sourcePath;
+  } catch (error) {
+    findings.push(fontFinding(missingCode, `${kind} is missing.`, { path: relative, error: error.code ?? error.message }));
+    return null;
+  }
+}
+
+export async function validateFontManifest(project, manifest) {
+  const findings = [];
+  if (!isObject(manifest)) return [fontFinding('FONT_MANIFEST_INVALID', 'Font manifest must be a JSON object.')];
+  if (manifest.version !== 1) findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Font manifest version must be 1.'));
+  const fonts = Array.isArray(manifest.fonts) ? manifest.fonts : [];
+  if (!Array.isArray(manifest.fonts)) {
+    findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Font manifest fonts must be an array.'));
+  } else if (fonts.length === 0) {
+    findings.push(fontFinding('FONT_LOAD_FAILED', 'Font manifest must declare at least one bundled font.'));
+  }
+
+  const projectRealPath = await realpath(project);
+  let css = '';
+  try {
+    css = await readFile(path.join(projectRealPath, 'styles.css'), 'utf8');
+  } catch (error) {
+    findings.push(fontFinding('SOURCE_MISSING', 'Font validation requires styles.css.', { error: error.code ?? error.message }));
+  }
+  const faces = cssFontFaces(css);
+  const declaredFiles = new Set();
+  const families = new Set();
+  const digestsByFamily = new Map();
+
+  for (const [index, font] of fonts.entries()) {
+    if (!isObject(font)) {
+      findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Every font manifest entry must be an object.', { index }));
+      continue;
+    }
+    const family = typeof font.family === 'string' ? font.family.trim() : '';
+    if (!family) findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Font family must be a non-empty string.', { index }));
+    else families.add(family);
+    if (!Array.isArray(font.samples) || font.samples.length === 0
+        || font.samples.some((sample) => typeof sample !== 'string' || sample.trim() === '' || /\\u[0-9a-f]{4}/i.test(sample))) {
+      findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Font samples must contain explicit non-empty glyph strings.', { index, samples: font.samples ?? null }));
+    }
+
+    const fontFile = normalizeManifestPath(font.file, 'assets/fonts/');
+    if (!fontFile) {
+      findings.push(fontFinding('FONT_PATH_INVALID', 'Font file path must be an exact normalized path under assets/fonts/.', { index, path: font.file ?? null }));
+    } else {
+      if (declaredFiles.has(fontFile)) {
+        findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Font file paths must be unique.', { index, path: fontFile }));
+      }
+      declaredFiles.add(fontFile);
+      const sourcePath = await validateManifestFile(projectRealPath, fontFile, 'Declared font file', 'FONT_FILE_MISSING', findings);
+      if (!/^[0-9a-f]{64}$/.test(font.sha256 ?? '')) {
+        findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Font SHA-256 must be a lowercase 64-character digest.', { index, path: fontFile, sha256: font.sha256 ?? null }));
+      } else if (sourcePath) {
+        const actual = await sha256(sourcePath);
+        if (actual !== font.sha256) {
+          findings.push(fontFinding('FONT_HASH_MISMATCH', 'Font file SHA-256 does not match the manifest.', { path: fontFile, expected: font.sha256, actual }));
+        }
+        if (family) {
+          const priorFamily = digestsByFamily.get(actual);
+          if (priorFamily && priorFamily !== family) {
+            findings.push(fontFinding('FONT_FAMILY_MISMATCH', 'One font file cannot substantiate multiple declared families.', { path: fontFile, family, conflictingFamily: priorFamily, sha256: actual }));
+          } else {
+            digestsByFamily.set(actual, family);
+          }
+        }
+      }
+      const matchingFaces = faces.filter((face) => face.file === fontFile);
+      if (!matchingFaces.some((face) => face.family === family)) {
+        findings.push(fontFinding('UNDECLARED_FONT', 'Manifest font is not bound to the same family and file in styles.css.', { path: fontFile, family, cssFamilies: matchingFaces.map((face) => face.family) }));
+      }
+    }
+
+    const licenseFile = normalizeManifestPath(font.licenseFile, 'assets/licenses/');
+    if (!licenseFile) {
+      findings.push(fontFinding('FONT_PATH_INVALID', 'Font license path must be an exact normalized path under assets/licenses/.', { index, path: font.licenseFile ?? null }));
+    } else {
+      await validateManifestFile(projectRealPath, licenseFile, 'Declared font license file', 'FONT_LICENSE_MISSING', findings);
+    }
+  }
+
+  for (const family of REQUIRED_FONT_FAMILIES) {
+    if (!families.has(family)) findings.push(fontFinding('UNDECLARED_FONT', 'Required bundled font family is absent from the manifest.', { family }));
+  }
+  for (const face of faces) {
+    if (!declaredFiles.has(face.file)) {
+      findings.push(fontFinding('UNDECLARED_FONT', 'A CSS font URL is not declared by the font manifest.', face));
+    }
+  }
+
+  try {
+    const installedManifest = JSON.parse(await readFile(path.join(projectRealPath, 'assets/fonts/font-manifest.json'), 'utf8'));
+    if (JSON.stringify(installedManifest) !== JSON.stringify(manifest)) {
+      findings.push(fontFinding('FONT_MANIFEST_MISMATCH', 'Root and installed font manifests must match exactly.'));
+    }
+  } catch (error) {
+    findings.push(fontFinding('FONT_MANIFEST_INVALID', 'Installed font manifest is missing or invalid.', { error: error.code ?? error.message }));
+  }
+
+  try {
+    const licenses = await readFile(path.join(projectRealPath, 'licenses.md'), 'utf8');
+    for (const font of fonts.filter(isObject)) {
+      const missing = [font.family, font.file, font.sha256, font.licenseFile]
+        .filter((value) => typeof value === 'string' && !licenses.includes(value));
+      if (missing.length) {
+        findings.push(fontFinding('FONT_LICENSE_DECLARATION_MISSING', 'licenses.md is not bound to the current font declaration.', { path: font.file ?? null, missing }));
+      }
+    }
+  } catch (error) {
+    findings.push(fontFinding('FONT_LICENSE_MISSING', 'Font license narrative is missing.', { path: 'licenses.md', error: error.code ?? error.message }));
+  }
+  return findings;
 }
 
 export async function installProjectResourceBoundary(context, project) {

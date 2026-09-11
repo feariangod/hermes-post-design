@@ -7,7 +7,7 @@ import jsQR from 'jsqr';
 import { PDFDocument } from 'pdf-lib';
 import { PNG } from 'pngjs';
 import { resolveExecutable } from './browser-paths.mjs';
-import { collectProjectSourceHashes, installProjectResourceBoundary, isFinalStatus, validateBrief, validateConfig, validateStaticHtml } from './poster-contract.mjs';
+import { collectProjectSourceHashes, installProjectResourceBoundary, isFinalStatus, validateBrief, validateConfig, validateFontManifest, validatePosterState, validatePublishQa, validateStaticHtml } from './poster-contract.mjs';
 
 function parseArgs(argv) {
   const flags = new Set();
@@ -478,6 +478,18 @@ async function main() {
     if (strict) process.exitCode = 1;
     return;
   }
+  const posterState = await readRequiredJson(project, 'poster.json', blockers);
+  const publishQa = await readRequiredJson(project, 'publish-qa.json', blockers);
+  const fontManifest = await readRequiredJson(project, 'font-manifest.json', blockers);
+  if (posterState) {
+    const issues = validatePosterState(posterState);
+    if (issues.length) blockers.push(finding('POSTER_STATE_INVALID', 'poster.json violates the workflow state contract.', { issues }));
+  }
+  if (publishQa) {
+    const issues = validatePublishQa(publishQa);
+    if (issues.length) blockers.push(finding('PUBLISH_QA_INVALID', 'publish-qa.json violates the Publish QA contract.', { issues }));
+  }
+  if (strict && fontManifest) blockers.push(...await validateFontManifest(project, fontManifest));
   const outputPaths = {
     pngPath: await projectOutputPath(project, config.outputs?.png, 'poster.png'),
     mobilePath: await projectOutputPath(project, config.outputs?.mobile, 'poster-mobile.png'),
@@ -514,6 +526,7 @@ async function main() {
       const poster = document.querySelector('#poster');
       const asciiPlaceholderPattern = /\b(TODO|TBD|PLACEHOLDER|LOREM IPSUM)\b/i;
       const chinesePlaceholderPattern = /(二维码占位|待补|待定)/;
+      const starterPhrases = new Set(['PREVIEW', 'Replace this starter content after the brief is approved.']);
       const nodes = [...document.querySelectorAll('body *')];
       const placeholders = [];
       const overflows = [];
@@ -525,7 +538,8 @@ async function main() {
 
       for (const element of nodes) {
         const text = element.children.length === 0 ? element.textContent?.trim() ?? '' : '';
-        if (text && (asciiPlaceholderPattern.test(text) || chinesePlaceholderPattern.test(text))) {
+        if (element.hasAttribute('data-placeholder')
+            || (text && (asciiPlaceholderPattern.test(text) || chinesePlaceholderPattern.test(text) || starterPhrases.has(text)))) {
           placeholders.push({ tag: element.tagName, text: text.slice(0, 160) });
         }
         const style = getComputedStyle(element);
@@ -634,20 +648,32 @@ async function main() {
       };
     });
 
-    const requiredFonts = [
-      { family: 'Noto Sans SC', sample: '海报 Poster 2026' },
-      { family: 'Noto Serif SC', sample: '科研 商业 会议' },
-      { family: 'Ma Shan Zheng', sample: '国风书法 AI' },
-    ];
+    const manifestFonts = Array.isArray(fontManifest?.fonts) ? fontManifest.fonts : [];
+    const requiredFonts = manifestFonts.flatMap((font) =>
+      typeof font?.family === 'string' && Array.isArray(font.samples)
+        ? font.samples.filter((sample) => typeof sample === 'string' && sample.length > 0)
+          .map((sample) => ({ family: font.family, sample }))
+        : []);
+    if (requiredFonts.length === 0) {
+      requiredFonts.push(
+        { family: 'Noto Sans SC', sample: '海报 Poster 2026' },
+        { family: 'Noto Serif SC', sample: '科研 商业 会议' },
+        { family: 'Ma Shan Zheng', sample: '国风书法 AI' },
+      );
+    }
     const loadedFonts = [];
     const failedFonts = [];
     runtimeStage = 'FONT_LOAD_FAILED';
     for (const font of requiredFonts) {
-      const loaded = await page.evaluate(async ({ family, sample }) => {
-        await document.fonts.load(`32px "${family}"`, sample);
-        return document.fonts.check(`32px "${family}"`, sample);
+      const result = await page.evaluate(async ({ family, sample }) => {
+        const matchingFaces = await document.fonts.load(`32px "${family}"`, sample);
+        const normalizedFamily = family.replace(/^['"]|['"]$/g, '');
+        const declared = matchingFaces.some((face) =>
+          face.family.replace(/^['"]|['"]$/g, '') === normalizedFamily && face.status === 'loaded');
+        return { checked: document.fonts.check(`32px "${family}"`, sample), declared };
       }, font);
-      (loaded ? loadedFonts : failedFonts).push(font.family);
+      const loaded = result === true || (result?.checked === true && result?.declared === true);
+      (loaded ? loadedFonts : failedFonts).push(`${font.family}: ${font.sample}`);
     }
     runtimeStage = 'PAGE_EVALUATION_FAILED';
     if (strict && failedFonts.length) {
@@ -742,11 +768,22 @@ async function main() {
 
     let visualReviewEvidence = null;
     if (finalRequested) {
-      const declaredStatuses = { config: config.status, brief: brief.status, poster: result.posterStatus };
-      const nonFinal = Object.entries(declaredStatuses).filter(([, value]) => !isFinalStatus(value));
-      if (nonFinal.length) {
-        blockers.push(finding('STATUS_NOT_FINAL', 'Final QA requires final status in config, brief, and poster DOM.', { declaredStatuses, nonFinal }));
+      const declaredStatuses = {
+        config: config.status,
+        brief: brief.status,
+        poster: result.posterStatus,
+        workflowMode: posterState?.mode,
+        workflowState: posterState?.state,
+        publishQa: publishQa?.status,
+      };
+      const workflowFinal = posterState?.mode === 'release' && posterState?.state === 'release';
+      const publishPassed = publishQa?.status === 'PASS';
+      const statusNonFinal = Object.entries({ config: config.status, brief: brief.status, poster: result.posterStatus })
+        .filter(([, value]) => !isFinalStatus(value));
+      if (statusNonFinal.length || !workflowFinal) {
+        blockers.push(finding('STATUS_NOT_FINAL', 'Final QA requires final status plus release workflow mode and state.', { declaredStatuses, nonFinal: statusNonFinal, workflowFinal }));
       }
+      if (!publishPassed) blockers.push(finding('PUBLISH_QA_NOT_PASS', 'Final QA requires publish-qa.json status PASS.', { status: publishQa?.status ?? null }));
       visualReviewEvidence = await inspectVisualReview(project, outputPaths, blockers);
       await inspectQaNarrative(project, outputPaths, blockers);
     }
@@ -765,7 +802,7 @@ async function main() {
         dom: result,
         facts: factEvidence,
         qrCodes: qrEvidence,
-        fonts: { required: requiredFonts.map((font) => font.family), loaded: loadedFonts, failed: failedFonts },
+        fonts: { required: requiredFonts, loaded: loadedFonts, failed: failedFonts, manifest: fontManifest },
         outputs: outputEvidence,
         visualReview: visualReviewEvidence,
       },

@@ -65,6 +65,9 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
     mobile: 'PENDING',
     artifacts: 'PENDING',
   });
+  const starterHtml = await readFile(path.join(project, 'poster.html'), 'utf8');
+  assert.match(starterHtml, /data-placeholder="starter-preview"[^>]*>PREVIEW</);
+  assert.match(starterHtml, /data-placeholder="starter-copy"[^>]*>Replace this starter content after the brief is approved\.</);
 
   run('npm', ['ci'], { cwd: project });
   run('npm', ['run', 'prepare'], { cwd: project });
@@ -97,6 +100,9 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
   for (const font of manifest.fonts) {
     assert.match(css, new RegExp(font.file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
+  const cssFontUrls = [...css.matchAll(/url\(["']?([^"')]+\.(?:woff2?|ttf|otf))["']?\)/gi)]
+    .map((match) => match[1]);
+  assert.deepEqual(new Set(cssFontUrls), new Set(manifest.fonts.map((font) => font.file)));
 
   const renderOutput = run('npm', ['run', 'render'], { cwd: project });
   assert.doesNotMatch(renderOutput, /ERR_MODULE_NOT_FOUND/);
