@@ -10,7 +10,7 @@ const FONT_SPECS = [
     licenseSource: '@fontsource/ma-shan-zheng/LICENSE',
     licenseFile: 'assets/licenses/MaShanZheng-OFL-1.1.txt',
     package: '@fontsource/ma-shan-zheng@5.3.0',
-    samples: ['\u4e2d\u6587\u6d77\u62a5'],
+    samples: ['中文海报'],
   },
   {
     family: 'Ma Shan Zheng',
@@ -28,7 +28,7 @@ const FONT_SPECS = [
     licenseSource: '@fontsource-variable/noto-sans-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSansSC-OFL-1.1.txt',
     package: '@fontsource-variable/noto-sans-sc@5.3.0',
-    samples: ['\u4e2d'],
+    samples: ['中'],
   },
   {
     family: 'Noto Sans SC',
@@ -46,7 +46,7 @@ const FONT_SPECS = [
     licenseSource: '@fontsource-variable/noto-serif-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSerifSC-OFL-1.1.txt',
     package: '@fontsource-variable/noto-serif-sc@5.3.0',
-    samples: ['\u4e2d'],
+    samples: ['中'],
   },
   {
     family: 'Noto Serif SC',

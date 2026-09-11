@@ -84,6 +84,10 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
   assert.deepEqual(JSON.parse(await readFile(path.join(project, 'font-manifest.json'), 'utf8')), manifest);
   assert.ok(Array.isArray(manifest.fonts));
   assert.ok(manifest.fonts.length > 0);
+  assert.deepEqual(
+    manifest.fonts.filter((font) => font.file.includes('Chinese')).map((font) => font.samples),
+    [['中文海报'], ['中'], ['中']],
+  );
   for (const font of manifest.fonts) {
     assert.deepEqual(Object.keys(font).sort(), ['family', 'file', 'licenseFile', 'samples', 'sha256']);
     assert.equal(typeof font.family, 'string');
@@ -91,6 +95,7 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
     assert.equal(typeof font.sha256, 'string');
     assert.equal(typeof font.licenseFile, 'string');
     assert.ok(Array.isArray(font.samples));
+    assert.doesNotMatch(font.samples.join(''), /\\u[0-9a-f]{4}/i);
     const fontPath = path.join(project, font.file);
     const licensePath = path.join(project, font.licenseFile);
     await access(fontPath);
