@@ -126,6 +126,22 @@ def test_apply_install_rolls_back_replacements_when_a_switch_fails(tmp_path, mon
         assert marker.read_text(encoding="utf-8") == relative
 
 
+def test_apply_install_rejects_backup_parent_symlink_that_escapes_home(tmp_path):
+    home = tmp_path / "codex"
+    outside = tmp_path / "outside"
+    home.mkdir()
+    outside.mkdir()
+    try:
+        (home / "backups").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable on this platform")
+
+    with pytest.raises(ValueError, match="escapes Codex home"):
+        apply_install("codex", home)
+
+    assert not list(outside.iterdir())
+
+
 def test_parent_symlink_cannot_redirect_managed_targets(tmp_path):
     home = tmp_path / "codex"
     outside = tmp_path / "outside"
@@ -148,3 +164,50 @@ def test_unknown_target_is_rejected_without_creating_home(tmp_path):
         plan_install("unknown", home)
 
     assert not home.exists()
+
+
+def test_restore_install_rejects_backup_path_through_escaping_intermediate_symlink(tmp_path):
+    import json
+
+    home = tmp_path / "codex"
+    outside = tmp_path / "outside"
+    home.mkdir()
+    outside.mkdir()
+    (home / "backups").mkdir()
+    try:
+        (home / "backups/hermes-post-design").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable on this platform")
+    backup = home / "backups/hermes-post-design/escaped"
+    backup.mkdir(parents=True)
+    (backup / "manifest.json").write_text(
+        json.dumps({"version": 2, "target": "codex", "targets": []}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="escapes|Backup must be under"):
+        restore_install("codex", home, backup)
+
+
+@pytest.mark.parametrize("target", ["agents", "codex", "claude"])
+def test_restore_install_rejects_targetless_manifest_for_non_hermes_targets(tmp_path, target):
+    import json
+
+    home = tmp_path / target
+    backup = home / "backups/hermes-post-design/legacy"
+    backup.mkdir(parents=True)
+    (backup / "manifest.json").write_text(json.dumps({"version": 1, "targets": []}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="target"):
+        restore_install(target, home, backup)
+
+
+def test_restore_install_accepts_targetless_legacy_manifest_for_hermes(tmp_path):
+    import json
+
+    home = tmp_path / "hermes"
+    backup = home / "backups/hermes-post-design/legacy"
+    backup.mkdir(parents=True)
+    (backup / "manifest.json").write_text(json.dumps({"version": 1, "targets": []}), encoding="utf-8")
+
+    assert restore_install("hermes", home, backup)["restored"] == []

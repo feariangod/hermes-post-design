@@ -128,7 +128,18 @@ def _command_install_skill(args) -> int:
         "dry_run": True,
         "entries": [entry.__dict__ for entry in plan_install(args.target, args.home)],
     }
-    print(json.dumps(payload, ensure_ascii=False, indent=2 if not args.json else None, sort_keys=True))
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        return 0
+    if payload.get("dry_run"):
+        print("Dry run: no changes applied.")
+    elif payload.get("changed"):
+        print("Installed poster skill.")
+        print(f"Backup: {payload['backup']}")
+    else:
+        print("Poster skill is already up to date.")
+    for entry in payload["entries"]:
+        print(f"{entry['action']}: {entry['component']} -> {entry['target']}")
     return 0
 
 

@@ -138,8 +138,8 @@ def _assert_plain_tree(path: Path, label: str) -> None:
             raise ValueError(f"Refusing symlink in {label}")
 
 
-def _backup_root(home: Path) -> Path:
-    return home / "backups" / _BACKUP_DIRECTORY
+def _backup_root(home: Path, home_label: str) -> Path:
+    return _managed_target(home, f"backups/{_BACKUP_DIRECTORY}", home_label)
 
 
 def _restore_target(target: Path, backup_target: Path, existed: bool) -> None:
@@ -167,13 +167,14 @@ def plan_install(target: str, home: Path | str | None = None) -> tuple[InstallEn
 def apply_install(target: str, home: Path | str | None = None) -> dict:
     install_target = _checked_target(target)
     install_home = _resolve_home(install_target, home)
+    home_label = f"{install_target.capitalize()} home"
     plan = plan_install(install_target, install_home)
     changes = [entry for entry in plan if entry.action != "unchanged"]
     if not changes:
         return {"changed": False, "backup": None, "entries": [asdict(item) for item in plan]}
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    backup = _backup_root(install_home) / timestamp
+    backup = _backup_root(install_home, home_label) / timestamp
     backup.mkdir(parents=True, exist_ok=False)
     root = _resource_root()
     manifest = {"version": 2, "target": install_target, "created_at": timestamp, "targets": []}
@@ -181,7 +182,7 @@ def apply_install(target: str, home: Path | str | None = None) -> dict:
 
     try:
         for source_rel, target_rel, _component in _TARGET_LAYOUTS[install_target]:
-            managed = _managed_target(install_home, target_rel, f"{install_target.capitalize()} home")
+            managed = _managed_target(install_home, target_rel, home_label)
             entry = next(item for item in plan if item.target == str(managed))
             if entry.action == "unchanged":
                 continue
@@ -233,12 +234,17 @@ def apply_install(target: str, home: Path | str | None = None) -> dict:
 def restore_install(target: str, home: Path | str, backup: Path | str) -> dict:
     install_target = _checked_target(target)
     install_home = _resolve_home(install_target, home)
+    home_label = f"{install_target.capitalize()} home"
     backup_path = Path(backup).expanduser().absolute()
-    allowed_root = _backup_root(install_home).absolute()
-    if backup_path.is_symlink() or allowed_root not in backup_path.parents:
+    allowed_root = _backup_root(install_home, home_label)
+    resolved_allowed_root = allowed_root.resolve(strict=False)
+    resolved_backup = backup_path.resolve(strict=False)
+    if backup_path.is_symlink() or resolved_allowed_root not in resolved_backup.parents:
         raise ValueError("Backup must be under the application backup directory")
     manifest = json.loads((backup_path / "manifest.json").read_text(encoding="utf-8"))
     manifest_target = manifest.get("target")
+    if manifest_target is None and install_target != "hermes":
+        raise ValueError("Backup manifest target is required for this install target")
     if manifest_target is not None and manifest_target != install_target:
         raise ValueError("Backup was created for a different install target")
 
@@ -253,7 +259,7 @@ def restore_install(target: str, home: Path | str, backup: Path | str) -> dict:
         if relative not in managed or relative in seen or type(existed) is not bool:
             raise ValueError("Backup contains an unmanaged or invalid target")
         seen.add(relative)
-        managed_target = _managed_target(install_home, relative, f"{install_target.capitalize()} home")
+        managed_target = _managed_target(install_home, relative, home_label)
         source = backup_path.joinpath("files", *relative.split("/"))
         if existed:
             if not source.is_dir():
