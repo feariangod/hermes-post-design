@@ -99,21 +99,31 @@ def test_install_excludes_development_dependencies(tmp_path, monkeypatch):
     (source / "templates").mkdir(parents=True)
     (source / "SKILL.md").write_text("canonical skill", encoding="utf-8")
     (source / "templates/brief.md").write_text("canonical template", encoding="utf-8")
-    (source / "node_modules/example/index.js").mkdir(parents=True)
-    (source / "node_modules/example/index.js/package.json").write_text("{}", encoding="utf-8")
-    (source / "__pycache__/install.cpython-313.pyc").mkdir(parents=True)
-    (source / "__pycache__/install.cpython-313.pyc/cache.pyc").write_bytes(b"cache")
-    (source / ".pytest_cache/state").mkdir(parents=True)
-    (source / ".pytest_cache/state/lastfailed").write_text("{}", encoding="utf-8")
-    (source / "coverage/html/index.html").mkdir(parents=True)
-    (source / "coverage/html/index.html/report.html").write_text("report", encoding="utf-8")
-    (source / "artifacts/render.png").mkdir(parents=True)
-    (source / "artifacts/render.png/poster.png").write_bytes(b"png")
-    (source / "reports/run.log").mkdir(parents=True)
-    (source / "reports/run.log/render.log").write_text("log", encoding="utf-8")
-    (source / ".env").write_text("SECRET=not-packaged", encoding="utf-8")
-    (source / "state/last-install.json").mkdir(parents=True)
-    (source / "state/last-install.json/host.json").write_text("state", encoding="utf-8")
+    excluded_files = (
+        "node_modules/example/index.js",
+        "__pycache__/install.cpython-313.pyc",
+        ".pytest_cache/v/cache/lastfailed",
+        "coverage/html/index.html",
+        "artifacts/poster.png",
+        "reports/render.log",
+        ".env",
+        "state/last-install.json",
+        "metadata/hermes_post_design.egg-info/PKG-INFO",
+        "metadata/hermes_post_design-0.1.0.dist-info/METADATA",
+        "artifacts/render-result.json",
+        "reports/qa-report.json",
+        "reports/visual-review.json",
+        "config.yaml",
+        "auth.json",
+        "sessions/current.json",
+        "cache/result.json",
+        "state/runtime.db",
+        "state/runtime.sqlite3",
+    )
+    for relative in excluded_files:
+        path = source / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("generated", encoding="utf-8")
     monkeypatch.setattr(install_module, "_resource_root", lambda: resource_root)
 
     result = apply_install("codex", tmp_path / "codex")
@@ -122,20 +132,31 @@ def test_install_excludes_development_dependencies(tmp_path, monkeypatch):
     assert result["changed"] is True
     assert (installed / "SKILL.md").is_file()
     assert (installed / "templates/brief.md").is_file()
-    assert not any(
-        (installed / excluded).exists()
-        for excluded in (
-            "node_modules",
-            "__pycache__",
-            ".pytest_cache",
-            "coverage",
-            "artifacts",
-            "reports",
-            ".env",
-            "state",
-        )
-    )
+    assert not any((installed / excluded).exists() for excluded in excluded_files)
     assert plan_install("codex", tmp_path / "codex")[0].action == "unchanged"
+
+
+@pytest.mark.parametrize("kind", ["file", "directory"])
+def test_plan_install_rejects_symlinked_source_resource(tmp_path, monkeypatch, kind):
+    import hermes_post_design.install as install_module
+
+    resource_root = tmp_path / "resources"
+    source = resource_root / "skills/creative/poster-design"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("canonical skill", encoding="utf-8")
+    outside = tmp_path / "outside"
+    link = source / "linked-resource"
+    if kind == "file":
+        outside.write_text("outside", encoding="utf-8")
+        link.symlink_to(outside)
+    else:
+        outside.mkdir()
+        (outside / "outside.md").write_text("outside", encoding="utf-8")
+        link.symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(install_module, "_resource_root", lambda: resource_root)
+
+    with pytest.raises(ValueError, match="Refusing symlink in packaged resources"):
+        plan_install("codex", tmp_path / "codex")
 
 
 def test_apply_install_rolls_back_replacements_when_a_switch_fails(tmp_path, monkeypatch):

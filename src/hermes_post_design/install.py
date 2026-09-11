@@ -51,6 +51,7 @@ _EXCLUDED_RESOURCE_PARTS = frozenset({
     "artifacts",
     "backups",
     "build",
+    "cache",
     "coverage",
     "credentials",
     "dist",
@@ -59,6 +60,7 @@ _EXCLUDED_RESOURCE_PARTS = frozenset({
     "node_modules",
     "reports",
     "secrets",
+    "sessions",
     "state",
     "temp",
     "tmp",
@@ -72,6 +74,12 @@ _EXCLUDED_RESOURCE_NAMES = frozenset({
     "coverage.xml",
     "credentials.json",
     "last-install.json",
+    "auth.json",
+    "config.yaml",
+    "config.yml",
+    "qa-report.json",
+    "render-result.json",
+    "visual-review.json",
 })
 _GENERATED_MEDIA_SUFFIXES = frozenset({
     ".avi",
@@ -138,13 +146,19 @@ def _should_include_resource(relative_parts: tuple[str, ...]) -> bool:
     name = lowered[-1]
     if any(part in _EXCLUDED_RESOURCE_PARTS for part in lowered):
         return False
+    if any(part.endswith((".dist-info", ".egg-info")) for part in lowered):
+        return False
     if name in _EXCLUDED_RESOURCE_NAMES or name.startswith(".env."):
+        return False
+    if name.endswith(".db") or ".sqlite" in name:
         return False
     return not any(name.endswith(suffix) for suffix in _GENERATED_MEDIA_SUFFIXES)
 
 
 def _iter_included_resources(node, relative_parts: tuple[str, ...] = ()):
     for child in sorted(node.iterdir(), key=lambda item: item.name):
+        if getattr(child, "is_symlink", lambda: False)():
+            raise ValueError("Refusing symlink in packaged resources")
         child_parts = relative_parts + (child.name,)
         if not _should_include_resource(child_parts):
             continue
