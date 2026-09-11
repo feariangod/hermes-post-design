@@ -121,6 +121,40 @@ ambiguous network failure -> stop; do not retry without fresh authorization""" i
     assert "Do not retry, fail over to another external capability" in adapter
 
 
+def test_host_adapter_maps_each_supported_and_unknown_host(skill_root):
+    adapter = (skill_root / "references/host-adapters.md").read_text(encoding="utf-8")
+    for heading in (
+        "## Codex adapter",
+        "## Hermes adapter",
+        "## Claude or MCP adapter",
+        "## Unknown-host adapter",
+    ):
+        assert heading in adapter
+    assert "Codex image generation capability" in adapter
+    assert "Hermes `image_generate`" in adapter
+    assert "Claude or MCP image capability" in adapter
+    assert "deterministic local route" in adapter
+
+
+def test_provider_commands_are_confined_to_host_adapter_reference(skill_root):
+    references = skill_root / "references"
+    for path in references.glob("*.md"):
+        if path.name == "host-adapters.md":
+            continue
+        body = path.read_text(encoding="utf-8")
+        assert "vision_analyze" not in body, path.name
+        assert "image_generate" not in body, path.name
+        assert "Chiyi uses" not in body, path.name
+        assert "quality=high" not in body, path.name
+
+
+def test_asset_policy_requires_structured_release_manifest(skill_root):
+    body = (skill_root / "references/asset-policy.md").read_text(encoding="utf-8")
+    assert "asset-manifest.json" in body
+    for field in ("path", "sha256", "source", "creator", "license", "authorization", "attribution"):
+        assert f"`{field}`" in body
+
+
 def test_readme_documents_every_portable_install_target(readme):
     homes = {
         "agents": "AGENTS_HOME",

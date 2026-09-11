@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-post-design"
 version = "0.1.0"
-description = "Chiyi image generation and poster workflow for Hermes Agent"
+description = "Portable poster workflow for Agent Skills hosts with an optional Chiyi adapter"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "feariangod"}]

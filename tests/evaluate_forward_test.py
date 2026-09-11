@@ -6,7 +6,9 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import struct
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -28,6 +30,7 @@ READINESS_PATTERNS = (
         re.IGNORECASE,
     ),
 )
+TRUSTED_SOURCE_RENDERER = Path(__file__).with_name("render_forward_source.mjs")
 
 
 def _sha256(path: Path) -> str:
@@ -113,6 +116,77 @@ def _png_dimensions(path: Path, label: str, issues: list[str]):
     except Exception as error:
         issues.append(f"{label} PNG does not decode: {type(error).__name__}")
     return {"width": width, "height": height}
+
+
+def _pixel_hash(path: Path) -> str:
+    with Image.open(path) as image:
+        return hashlib.sha256(image.convert("RGBA").tobytes()).hexdigest()
+
+
+def _png_content(path: Path) -> dict:
+    with Image.open(path) as image:
+        sample = image.convert("RGBA").resize((64, 64))
+        colors = sample.getcolors(maxcolors=64 * 64) or []
+        extrema = sample.getextrema()
+        pixels = (
+            sample.get_flattened_data()
+            if hasattr(sample, "get_flattened_data")
+            else sample.getdata()
+        )
+        luma_values = [
+            round((red * 299 + green * 587 + blue * 114) / 1000)
+            for red, green, blue, alpha in pixels
+            if alpha > 0
+        ]
+    return {
+        "sampled_colors": len(colors),
+        "luma_range": max(luma_values) - min(luma_values) if luma_values else 0,
+        "channel_extrema": extrema,
+    }
+
+
+def _verify_source_render(source: Path, artifact: Path, issues: list[str]) -> dict:
+    evidence = {
+        "renderer": str(TRUSTED_SOURCE_RENDERER),
+        "source_pixel_sha256": None,
+        "artifact_pixel_sha256": _pixel_hash(artifact),
+        "matches": False,
+    }
+    if source.suffix.lower() != ".svg":
+        issues.append("deterministic source must be an SVG for trusted reproduction")
+        return evidence
+    with tempfile.TemporaryDirectory(prefix="poster-forward-render-") as temporary:
+        reproduced = Path(temporary) / "reproduced.png"
+        completed = subprocess.run(
+            [
+                "node",
+                str(TRUSTED_SOURCE_RENDERER),
+                "--source",
+                str(source),
+                "--output",
+                str(reproduced),
+                "--width",
+                str(EXPECTED_WIDTH),
+                "--height",
+                str(EXPECTED_HEIGHT),
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0 or not reproduced.is_file():
+            issues.append(
+                "trusted deterministic source reproduction failed: "
+                f"{completed.stderr.strip() or completed.stdout.strip()}"
+            )
+            return evidence
+        evidence["source_pixel_sha256"] = _pixel_hash(reproduced)
+        evidence["matches"] = (
+            evidence["source_pixel_sha256"] == evidence["artifact_pixel_sha256"]
+        )
+    if not evidence["matches"]:
+        issues.append("artifact pixels do not match the deterministic source render")
+    return evidence
 
 
 def _style_values(element) -> dict[str, str]:
@@ -237,6 +311,8 @@ def evaluate_forward_test(workdir: Path) -> dict:
     source_path = None
     verified_hashes = []
     artifact_dimensions = None
+    content_evidence = None
+    render_provenance = None
     if verification is not None:
         if verification.get("stage") != "concept":
             issues.append("verification stage must be concept")
@@ -258,6 +334,15 @@ def evaluate_forward_test(workdir: Path) -> dict:
                 "height": EXPECTED_HEIGHT,
             }:
                 issues.append("artifact PNG IHDR must be exactly 1080x1920")
+            if artifact_dimensions == {"width": EXPECTED_WIDTH, "height": EXPECTED_HEIGHT}:
+                content_evidence = _png_content(artifact_path)
+                if (
+                    content_evidence["sampled_colors"] <= 2
+                    and content_evidence["luma_range"] <= 3
+                ):
+                    issues.append(
+                        "artifact PNG must contain non-uniform visible content"
+                    )
         artifact_evidence = verification.get("artifact")
         if not isinstance(artifact_evidence, dict) or artifact_evidence.get("non_empty") is not True:
             issues.append("artifact evidence must record non_empty=true")
@@ -279,6 +364,13 @@ def evaluate_forward_test(workdir: Path) -> dict:
                 issues.append(
                     "source does not contain a visible awaiting-confirmation label"
                 )
+        if artifact_path is not None and source_path is not None and artifact_dimensions == {
+            "width": EXPECTED_WIDTH,
+            "height": EXPECTED_HEIGHT,
+        }:
+            render_provenance = _verify_source_render(
+                source_path, artifact_path, issues
+            )
 
         phone = verification.get("phone_scale_review")
         if phone is not None:
@@ -332,12 +424,14 @@ def evaluate_forward_test(workdir: Path) -> dict:
             "path": str(artifact_path) if artifact_path else None,
             "dimensions": artifact_dimensions,
             "sha256": _sha256(artifact_path) if artifact_path else None,
+            "content": content_evidence,
         },
         "source": {
             "path": str(source_path) if source_path else None,
             "sha256": _sha256(source_path) if source_path else None,
         },
         "visible_label": "AWAITING CONFIRMATION" if source_path and _is_visible_svg_label(source_path) else None,
+        "render_provenance": render_provenance,
         "provider": {key: provider.get(key) for key in expected_provider},
         "verified_hashes": verified_hashes,
         "issues": issues,

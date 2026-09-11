@@ -194,6 +194,79 @@ def test_apply_install_rolls_back_replacements_when_a_switch_fails(tmp_path, mon
         assert marker.read_text(encoding="utf-8") == relative
 
 
+def test_apply_install_rolls_back_targets_and_state_when_state_publication_fails(
+    tmp_path, monkeypatch
+):
+    import hermes_post_design.install as install_module
+
+    home = tmp_path / "codex"
+    managed = home / "skills/poster-design"
+    managed.mkdir(parents=True)
+    marker = managed / "local.txt"
+    marker.write_text("before", encoding="utf-8")
+    state = home / "state/hermes-post-design"
+    state.mkdir(parents=True)
+    state_marker = state / "last-install.json"
+    state_marker.write_text('{"before": true}\n', encoding="utf-8")
+
+    real_replace = install_module.os.replace
+    failed = False
+
+    def fail_state_publication(source, target):
+        nonlocal failed
+        if Path(target) == state and not failed:
+            failed = True
+            raise OSError("injected state publication failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(install_module.os, "replace", fail_state_publication)
+
+    with pytest.raises(OSError, match="injected state publication failure"):
+        apply_install("codex", home)
+
+    assert marker.read_text(encoding="utf-8") == "before"
+    assert state_marker.read_text(encoding="utf-8") == '{"before": true}\n'
+    backup_root = home / "backups/hermes-post-design"
+    assert not backup_root.exists() or not any(backup_root.iterdir())
+
+
+@pytest.mark.parametrize("target", ["codex", "hermes"])
+def test_apply_install_rejects_state_parent_redirect_before_any_write(tmp_path, target):
+    home = tmp_path / target
+    outside = tmp_path / "outside"
+    home.mkdir()
+    outside.mkdir()
+    try:
+        (home / "state").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable on this platform")
+
+    with pytest.raises(ValueError, match="state|redirect|symlink|escapes"):
+        apply_install(target, home)
+
+    assert not list(outside.iterdir())
+    assert not (home / "skills").exists()
+    assert not (home / "plugins").exists()
+
+
+def test_apply_install_removes_failed_partial_backup_after_preflight_error(tmp_path):
+    home = tmp_path / "codex"
+    managed = home / "skills/poster-design"
+    managed.mkdir(parents=True)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside", encoding="utf-8")
+    try:
+        (managed / "linked.txt").symlink_to(outside)
+    except OSError:
+        pytest.skip("file symlinks are unavailable on this platform")
+
+    with pytest.raises(ValueError, match="symlink"):
+        apply_install("codex", home)
+
+    backup_root = home / "backups/hermes-post-design"
+    assert not backup_root.exists() or not any(backup_root.iterdir())
+
+
 def test_apply_install_rejects_backup_parent_symlink_that_escapes_home(tmp_path):
     home = tmp_path / "codex"
     outside = tmp_path / "outside"

@@ -15,7 +15,7 @@ The authoritative canvas is stored in `poster.config.json`.
 
 ## Critical Facts
 
-Record every approved name, date, price, place, contact, URL, QR destination, scientific value, unit, and claim in `brief.json`. Unresolved critical facts keep the project in preview status.
+Record every approved name, date, price, place, contact, URL, QR destination, scientific value, unit, and claim in `brief.json`. Keep workflow mode, state, direction, provider decision, and approved readable copy only in `poster.json`; unresolved critical facts keep that workflow from reaching Release.
 
 ## Assets And Rights
 

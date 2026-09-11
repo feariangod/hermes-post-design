@@ -13,7 +13,6 @@ const initPoster = path.join(skillRoot, 'scripts/init-poster.mjs');
 const requireFromSkill = createRequire(path.join(skillRoot, 'package.json'));
 const { PNG } = requireFromSkill('pngjs');
 const { PDFDocument, rgb } = requireFromSkill('pdf-lib');
-const fontkit = requireFromSkill('fontkit');
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -88,6 +87,22 @@ async function updateLicenseRecordHashes(project, manifest) {
   }
   await writeJson(path.join(project, 'font-license-manifest.json'), licenseManifest);
   await writeJson(path.join(project, 'assets/licenses/font-license-manifest.json'), licenseManifest);
+}
+
+async function recordAsset(project, relative, overrides = {}) {
+  const manifestPath = path.join(project, 'asset-manifest.json');
+  const manifest = await readJson(manifestPath);
+  manifest.assets.push({
+    path: relative.split(path.sep).join('/'),
+    sha256: await sha256(path.join(project, relative)),
+    source: 'user-supplied fixture',
+    creator: 'fixture author',
+    license: 'fixture-only',
+    authorization: 'authorized for this isolated test',
+    attribution: 'not required for fixture',
+    ...overrides,
+  });
+  await writeJson(manifestPath, manifest);
 }
 
 async function writeOutputs(project) {
@@ -183,16 +198,17 @@ async function createReleaseProject(context, scenario) {
 
   const configPath = path.join(project, 'poster.config.json');
   const config = await readJson(configPath);
-  config.status = 'final';
-  config.mode = 'release';
-  config.state = 'release';
+  delete config.status;
+  delete config.mode;
+  delete config.state;
   await writeJson(configPath, config);
 
   const briefPath = path.join(project, 'brief.json');
   const brief = await readJson(briefPath);
-  brief.status = 'final';
-  brief.mode = 'release';
-  brief.state = 'release';
+  delete brief.status;
+  delete brief.mode;
+  delete brief.state;
+  delete brief.approvedCopy;
   await writeJson(briefPath, brief);
 
   await writeJson(path.join(project, 'poster.json'), {
@@ -201,7 +217,7 @@ async function createReleaseProject(context, scenario) {
     state: 'release',
     conceptRevision: 0,
     direction: 'approved release direction',
-    approvedCopy: ['Release poster'],
+    approvedCopy: ['RELEASE', 'Release poster', 'Approved release content.'],
     provider: {
       adapter: 'deterministic-local',
       external: false,
@@ -223,42 +239,33 @@ async function createReleaseProject(context, scenario) {
   });
 
   const htmlPath = path.join(project, 'poster.html');
-  let html = (await readFile(htmlPath, 'utf8')).replace('data-poster-status="preview"', 'data-poster-status="final"');
+  let html = (await readFile(htmlPath, 'utf8')).replace(' data-poster-status="preview"', '');
   if (scenario !== 'starter-copy') {
     html = html
-      .replace('<p class="eyebrow" data-placeholder="starter-preview">PREVIEW</p>', '<p class="eyebrow">RELEASE</p>')
-      .replace('<p data-placeholder="starter-copy">Replace this starter content after the brief is approved.</p>', '<p>Approved release content.</p>');
+      .replace('<p class="eyebrow" data-placeholder="starter-preview">PREVIEW</p>', '<p class="eyebrow" data-copy>RELEASE</p>')
+      .replace('<h1 data-fact="title">', '<h1 data-fact="title" data-copy>')
+      .replace('<p data-placeholder="starter-copy">Replace this starter content after the brief is approved.</p>', '<p data-copy>Approved release content.</p>');
   } else {
     html = html.replaceAll(/\sdata-placeholder="[^"]+"/g, '');
   }
   await writeFile(htmlPath, html);
 
   if (scenario === 'system-font-substitution') {
-    const cssPath = path.join(project, 'styles.css');
+    const cssPath = path.join(project, 'font-faces.css');
     const css = await readFile(cssPath, 'utf8');
-    await writeFile(cssPath, css.replaceAll(/@font-face\s*\{[^}]+\}\s*/gs, '').replaceAll(/"(?:Noto Sans SC|Noto Serif SC|Ma Shan Zheng)"/g, 'Arial'));
+    await writeFile(cssPath, css.replaceAll(/@font-face\s*\{[^}]+\}\s*/gs, ''));
+    const stylesPath = path.join(project, 'styles.css');
+    await writeFile(stylesPath, (await readFile(stylesPath, 'utf8')).replaceAll(/"(?:Noto Sans SC|Noto Serif SC|Ma Shan Zheng)"/g, 'Arial'));
   }
   if (scenario === 'font-family-masquerade') {
-    const sourceDirectory = path.join(skillRoot, 'node_modules/@fontsource-variable/noto-sans-sc/files');
-    const sources = [
-      'noto-sans-sc-latin-wght-normal.woff2',
-      'noto-sans-sc-latin-ext-wght-normal.woff2',
-      'noto-sans-sc-vietnamese-wght-normal.woff2',
-      'noto-sans-sc-cyrillic-wght-normal.woff2',
-      'noto-sans-sc-119-wght-normal.woff2',
-      'noto-sans-sc-82-wght-normal.woff2',
-    ];
     const manifest = await readJson(path.join(project, 'font-manifest.json'));
     let licenses = await readFile(path.join(project, 'licenses.md'), 'utf8');
-    for (const [index, font] of manifest.fonts.entries()) {
-      const previousHash = font.sha256;
-      await copyFile(path.join(sourceDirectory, sources[index]), path.join(project, font.file));
-      const parsed = fontkit.create(await readFile(path.join(project, font.file)));
-      const sampleCodePoint = parsed.characterSet.find((codePoint) => String.fromCodePoint(codePoint).trim() !== '');
-      font.samples = [String.fromCodePoint(sampleCodePoint)];
-      font.sha256 = await sha256(path.join(project, font.file));
-      licenses = licenses.replace(previousHash, font.sha256);
-    }
+    const font = manifest.fonts.find((entry) => entry.family === 'Ma Shan Zheng' && /-5-/.test(entry.file));
+    const replacement = manifest.fonts.find((entry) => entry.family === 'Noto Sans SC' && /-5-/.test(entry.file));
+    const previousHash = font.sha256;
+    await copyFile(path.join(project, replacement.file), path.join(project, font.file));
+    font.sha256 = await sha256(path.join(project, font.file));
+    licenses = licenses.replace(previousHash, font.sha256);
     await writeJson(path.join(project, 'font-manifest.json'), manifest);
     await writeJson(path.join(project, 'assets/fonts/font-manifest.json'), manifest);
     await updateLicenseRecordHashes(project, manifest);
@@ -296,7 +303,7 @@ async function createReleaseProject(context, scenario) {
     for (const relative of ['font-manifest.json', 'assets/fonts/font-manifest.json']) {
       const manifestPath = path.join(project, relative);
       const manifest = await readJson(manifestPath);
-      const latinFont = manifest.fonts.find((font) => font.file === 'assets/fonts/NotoSansSC-Latin.woff2');
+      const latinFont = manifest.fonts.find((font) => font.family === 'Noto Sans SC' && font.file.includes('-latin-'));
       latinFont.samples = ['中'];
       await writeJson(manifestPath, manifest);
     }
@@ -365,12 +372,12 @@ async function createReleaseProject(context, scenario) {
     await writeFile(licensesPath, (await readFile(licensesPath, 'utf8')).replaceAll(oldHash, replacementHash));
   }
   if (scenario === 'font-local-source') {
-    const cssPath = path.join(project, 'styles.css');
+    const cssPath = path.join(project, 'font-faces.css');
     const css = await readFile(cssPath, 'utf8');
-    await writeFile(cssPath, css.replace('src: url("assets/fonts/MaShanZheng-Chinese.woff2")', 'src: local("Arial"), url("assets/fonts/MaShanZheng-Chinese.woff2")'));
+    await writeFile(cssPath, css.replace('src: url(', 'src: local("Arial"), url('));
   }
   if (scenario === 'css-font-url') {
-    await writeFile(path.join(project, 'styles.css'), `${await readFile(path.join(project, 'styles.css'), 'utf8')}\n@font-face { font-family: "Undeclared Font"; src: url("assets/fonts/undeclared.woff2") format("woff2"); }\n`);
+    await writeFile(path.join(project, 'font-faces.css'), `${await readFile(path.join(project, 'font-faces.css'), 'utf8')}\n@font-face { font-family: "Undeclared Font"; src: url("assets/fonts/undeclared.woff2") format("woff2"); }\n`);
   }
   if (scenario === 'invalid-transition') {
     const posterPath = path.join(project, 'poster.json');
@@ -410,11 +417,43 @@ async function createReleaseProject(context, scenario) {
     await writeJson(briefPath, briefValue);
   }
   if (scenario === 'publish-identity-na') {
-    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', '<span class="speaker-portrait">Approved identity</span></section>'));
+    const posterPath = path.join(project, 'poster.json');
+    const poster = await readJson(posterPath);
+    poster.approvedCopy.push('Approved identity');
+    await writeJson(posterPath, poster);
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', '<span class="speaker-portrait" data-copy>Approved identity</span></section>'));
   }
   if (scenario === 'publish-logo-asset-na') {
     await mkdir(path.join(project, 'assets/logos'), { recursive: true });
     await writeFile(path.join(project, 'assets/logos/brand.txt'), 'authorized logo fixture');
+    await recordAsset(project, 'assets/logos/brand.txt');
+  }
+  if (scenario === 'asset-unlicensed') {
+    await mkdir(path.join(project, 'assets/images'), { recursive: true });
+    await writeFile(path.join(project, 'assets/images/photo.txt'), 'unrecorded external asset');
+  }
+  if (scenario === 'asset-hash') {
+    await mkdir(path.join(project, 'assets/images'), { recursive: true });
+    await writeFile(path.join(project, 'assets/images/photo.txt'), 'recorded external asset');
+    await recordAsset(project, 'assets/images/photo.txt', { sha256: '0'.repeat(64) });
+  }
+  if (scenario === 'asset-metadata') {
+    await mkdir(path.join(project, 'assets/images'), { recursive: true });
+    await writeFile(path.join(project, 'assets/images/photo.txt'), 'recorded external asset');
+    await recordAsset(project, 'assets/images/photo.txt', { attribution: '' });
+  }
+  if (scenario === 'copy-mismatch') {
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('Approved release content.', 'Unapproved release content.'));
+  }
+  if (scenario === 'copy-unbound') {
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('<p data-copy>Approved release content.</p>', '<p>Approved release content.</p>'));
+  }
+  if (scenario === 'font-poster-glyph') {
+    const posterPath = path.join(project, 'poster.json');
+    const poster = await readJson(posterPath);
+    poster.approvedCopy.push('𠮷');
+    await writeJson(posterPath, poster);
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', '<p data-copy>𠮷</p></section>'));
   }
 
   await writeOutputs(project);
@@ -460,7 +499,7 @@ test('Release accepts the mechanically clean baseline fixture', async (context) 
 
 for (const [scenario, expectedCodes] of [
   ['system-font-substitution', ['FONT_LOAD_FAILED', 'UNDECLARED_FONT']],
-  ['font-family-masquerade', ['FONT_BINARY_FAMILY_MISMATCH']],
+  ['font-family-masquerade', ['FONT_BINARY_FAMILY_MISMATCH', 'FONT_FAMILY_MISMATCH', 'FONT_GLYPH_MISSING']],
   ['font-local-source', ['FONT_SOURCE_INVALID']],
   ['font-hash', ['FONT_HASH_MISMATCH']],
   ['font-path', ['FONT_PATH_INVALID', 'UNDECLARED_FONT']],
@@ -470,7 +509,13 @@ for (const [scenario, expectedCodes] of [
   ['font-license-swap', ['FONT_LICENSE_BINDING_MISMATCH']],
   ['font-license-coordinated-swap', ['FONT_LICENSE_BINDING_MISMATCH']],
   ['font-license-content', ['FONT_LICENSE_BINDING_MISMATCH']],
-  ['starter-copy', ['UNRESOLVED_PLACEHOLDER']],
+  ['font-poster-glyph', ['FONT_LOAD_FAILED', 'FONT_POSTER_GLYPH_MISSING']],
+  ['starter-copy', ['COPY_MISMATCH', 'COPY_UNBOUND', 'UNRESOLVED_PLACEHOLDER']],
+  ['copy-mismatch', ['COPY_MISMATCH']],
+  ['copy-unbound', ['COPY_MISMATCH', 'COPY_UNBOUND']],
+  ['asset-unlicensed', ['ASSET_LICENSE_MISSING']],
+  ['asset-hash', ['ASSET_HASH_MISMATCH']],
+  ['asset-metadata', ['ASSET_LICENSE_INVALID']],
   ['output-hash', ['OUTPUT_HASH_MISMATCH']],
   ['visual-review', ['VISUAL_REVIEW_STALE']],
   ['css-font-url', ['UNDECLARED_FONT']],

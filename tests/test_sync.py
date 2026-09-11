@@ -14,10 +14,31 @@ def test_plan_is_read_only_and_lists_three_managed_components(tmp_path):
     assert list(tmp_path.rglob("*")) == before
 
 
+def test_plan_sync_preserves_legacy_component_order_and_labels(tmp_path):
+    plan = plan_sync(tmp_path / "hermes")
+
+    assert [item.component for item in plan] == ["plugin", "skill", "skill"]
+    assert [Path(item.target).as_posix().split("/hermes/", 1)[-1] for item in plan] == [
+        "plugins/image_gen/chiyi",
+        "skills/media/chiyi-image-generation",
+        "skills/creative/poster-design",
+    ]
+
+
 def test_apply_sync_is_idempotent_and_deploys_resources(tmp_path):
     home = tmp_path / "hermes"
     first = apply_sync(home)
     assert first["changed"] is True
+    assert [entry["component"] for entry in first["entries"]] == [
+        "plugin",
+        "skill",
+        "skill",
+    ]
+    assert [Path(entry["target"]).relative_to(home).as_posix() for entry in first["entries"]] == [
+        "plugins/image_gen/chiyi",
+        "skills/media/chiyi-image-generation",
+        "skills/creative/poster-design",
+    ]
     assert Path(first["backup"]).is_dir()
     assert (home / "plugins/image_gen/chiyi/plugin.yaml").is_file()
     assert (home / "skills/media/chiyi-image-generation/SKILL.md").is_file()
@@ -25,6 +46,11 @@ def test_apply_sync_is_idempotent_and_deploys_resources(tmp_path):
 
     second = apply_sync(home)
     assert second["changed"] is False
+    assert [entry["component"] for entry in second["entries"]] == [
+        "plugin",
+        "skill",
+        "skill",
+    ]
     assert all(item["action"] == "unchanged" for item in second["entries"])
 
 

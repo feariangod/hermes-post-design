@@ -90,7 +90,7 @@ Do not generate preview images at this gate. After selection, combine compatible
 
 Compile the selected direction in this order:
 
-1. **Deliverable and audience** — purpose, intended action, audience, viewing context, and exact final `size="WIDTHxHEIGHT"`.
+1. **Deliverable and audience** — purpose, intended action, audience, viewing context, and exact final width and height required by the selected host adapter.
 2. **Core visual proposition** — selected archetype, one visual metaphor, mood, and first-glance message.
 3. **Composition and information zones** — hero scale/position, title, support, facts/action zones, safe margins, depth, and reading order.
 4. **Subject and asset roles** — subject/action, hero prop, camera, lighting, and explicit content/style/layout role for every reference.
@@ -99,8 +99,6 @@ Compile the selected direction in this order:
 
 ## Normalization
 
-- Chiyi uses `size="WIDTHxHEIGHT"`; never pass `aspect_ratio`.
-- Keep `quality=high`; do not expose another quality level.
 - Remove resolution theater such as `2K/4K/8K`; report measured decoded dimensions instead.
 - Ask for one finished poster, never a main-and-alternate pair, moodboard, process sheet, or option grid.
 - Convert vague style words into visible composition, light, material, palette, lens, and typography choices.

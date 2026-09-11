@@ -1,67 +1,38 @@
 import { createHash } from 'node:crypto';
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import * as fontkit from 'fontkit';
+import { assertSafeDestinationPath, ensureSafeDirectory, publishProjectFile, resolveProjectRoot } from './path-safety.mjs';
 
-const FONT_SPECS = [
+const FONT_PACKAGES = [
   {
     family: 'Ma Shan Zheng',
-    source: '@fontsource/ma-shan-zheng/files/ma-shan-zheng-chinese-simplified-400-normal.woff2',
-    file: 'assets/fonts/MaShanZheng-Chinese.woff2',
+    slug: 'ma-shan-zheng',
+    cssSource: '@fontsource/ma-shan-zheng/400.css',
     licenseSource: '@fontsource/ma-shan-zheng/LICENSE',
     licenseFile: 'assets/licenses/MaShanZheng-OFL-1.1.txt',
     licenseSha256: '37784825d863bab31cdff1f4bfabae5b8d8e9913b91db2064a6b803b2edc92db',
     package: '@fontsource/ma-shan-zheng@5.3.0',
-    samples: ['中文海报'],
-  },
-  {
-    family: 'Ma Shan Zheng',
-    source: '@fontsource/ma-shan-zheng/files/ma-shan-zheng-latin-400-normal.woff2',
-    file: 'assets/fonts/MaShanZheng-Latin.woff2',
-    licenseSource: '@fontsource/ma-shan-zheng/LICENSE',
-    licenseFile: 'assets/licenses/MaShanZheng-OFL-1.1.txt',
-    licenseSha256: '37784825d863bab31cdff1f4bfabae5b8d8e9913b91db2064a6b803b2edc92db',
-    package: '@fontsource/ma-shan-zheng@5.3.0',
-    samples: ['Poster title'],
   },
   {
     family: 'Noto Sans SC',
-    source: '@fontsource-variable/noto-sans-sc/files/noto-sans-sc-119-wght-normal.woff2',
-    file: 'assets/fonts/NotoSansSC-ChineseSubset.woff2',
+    sourceFamily: 'Noto Sans SC Variable',
+    slug: 'noto-sans-sc',
+    cssSource: '@fontsource-variable/noto-sans-sc/wght.css',
     licenseSource: '@fontsource-variable/noto-sans-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSansSC-OFL-1.1.txt',
     licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
     package: '@fontsource-variable/noto-sans-sc@5.3.0',
-    samples: ['中'],
-  },
-  {
-    family: 'Noto Sans SC',
-    source: '@fontsource-variable/noto-sans-sc/files/noto-sans-sc-latin-wght-normal.woff2',
-    file: 'assets/fonts/NotoSansSC-Latin.woff2',
-    licenseSource: '@fontsource-variable/noto-sans-sc/LICENSE',
-    licenseFile: 'assets/licenses/NotoSansSC-OFL-1.1.txt',
-    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
-    package: '@fontsource-variable/noto-sans-sc@5.3.0',
-    samples: ['Poster title'],
   },
   {
     family: 'Noto Serif SC',
-    source: '@fontsource-variable/noto-serif-sc/files/noto-serif-sc-119-wght-normal.woff2',
-    file: 'assets/fonts/NotoSerifSC-ChineseSubset.woff2',
+    sourceFamily: 'Noto Serif SC Variable',
+    slug: 'noto-serif-sc',
+    cssSource: '@fontsource-variable/noto-serif-sc/wght.css',
     licenseSource: '@fontsource-variable/noto-serif-sc/LICENSE',
     licenseFile: 'assets/licenses/NotoSerifSC-OFL-1.1.txt',
     licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
     package: '@fontsource-variable/noto-serif-sc@5.3.0',
-    samples: ['中'],
-  },
-  {
-    family: 'Noto Serif SC',
-    source: '@fontsource-variable/noto-serif-sc/files/noto-serif-sc-latin-wght-normal.woff2',
-    file: 'assets/fonts/NotoSerifSC-Latin.woff2',
-    licenseSource: '@fontsource-variable/noto-serif-sc/LICENSE',
-    licenseFile: 'assets/licenses/NotoSerifSC-OFL-1.1.txt',
-    licenseSha256: '18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3',
-    package: '@fontsource-variable/noto-serif-sc@5.3.0',
-    samples: ['Poster title'],
   },
 ];
 
@@ -86,73 +57,163 @@ function relativePath(value) {
   return value.split(path.sep).join('/');
 }
 
+function declaration(block, name) {
+  return block.match(new RegExp(`${name}\\s*:\\s*([^;]+);`, 'i'))?.[1]?.trim() ?? null;
+}
+
+function parsePinnedFaces(css, spec) {
+  const faces = [];
+  for (const match of css.matchAll(/@font-face\s*\{([\s\S]*?)\}/gi)) {
+    const block = match[1];
+    const family = declaration(block, 'font-family')?.replace(/^['"]|['"]$/g, '');
+    const source = [...block.matchAll(/url\(\s*["']?([^"')]+\.woff2)["']?\s*\)/gi)][0]?.[1];
+    const unicodeRange = declaration(block, 'unicode-range');
+    if (family !== (spec.sourceFamily ?? spec.family) || !source || !unicodeRange) {
+      throw new Error(`Pinned font CSS is incomplete for ${spec.package}`);
+    }
+    const basename = path.posix.basename(source);
+    faces.push({
+      ...spec,
+      source: path.posix.join(path.posix.dirname(spec.cssSource), source.replace(/^\.\//, '')),
+      file: `assets/fonts/${spec.slug}/${basename}`,
+      style: declaration(block, 'font-style') ?? 'normal',
+      weight: declaration(block, 'font-weight') ?? '400',
+      unicodeRange,
+    });
+  }
+  if (!faces.length) throw new Error(`Pinned font CSS declares no WOFF2 faces for ${spec.package}`);
+  return faces;
+}
+
+function explicitSample(buffer) {
+  const parsed = fontkit.create(buffer);
+  const codePoint = parsed.characterSet.find((value) => String.fromCodePoint(value).trim() !== '');
+  if (codePoint === undefined) throw new Error('Pinned font shard contains no explicit sample glyph');
+  return String.fromCodePoint(codePoint);
+}
+
+function fontCss(fonts) {
+  const blocks = fonts.map((font) => [
+    '@font-face {',
+    `  font-family: "${font.family}";`,
+    `  src: url("${font.file}") format("woff2");`,
+    `  font-style: ${font.style};`,
+    `  font-weight: ${font.weight};`,
+    '  font-display: block;',
+    `  unicode-range: ${font.unicodeRange};`,
+    '}',
+  ].join('\n'));
+  return `/* Generated from pinned Fontsource packages by npm run prepare. */\n\n${blocks.join('\n\n')}\n`;
+}
+
 function licenseRecords(fonts) {
-  return fonts.map((font, index) => ({
+  return fonts.map((font) => ({
     family: font.family,
     file: font.file,
     sha256: font.sha256,
     licenseFile: font.licenseFile,
-    licenseSha256: FONT_SPECS[index].licenseSha256,
+    licenseSha256: font.licenseSha256,
     ...LICENSE,
-    sourcePackage: FONT_SPECS[index].package,
+    sourcePackage: font.package,
   }));
 }
 
-function licensesMarkdown(fonts, records) {
-  const sections = records.map((record, index) => [
-    `## ${record.family} (${fonts[index].samples.join(', ')})`,
+function licensesMarkdown(fonts) {
+  const families = [...new Map(fonts.map((font) => [font.family, font])).values()];
+  const sections = families.map((font) => [
+    `## ${font.family}`,
     '',
-    `- Package: \`${record.sourcePackage}\``,
-    `- File: \`${record.file}\``,
-    `- SHA-256: \`${record.sha256}\``,
-    `- License: ${record.licenseName} ${record.licenseVersion} (\`${record.licenseId}\`)`,
-    `- License file: \`${record.licenseFile}\``,
-    `- License SHA-256: \`${record.licenseSha256}\``,
+    `- Package: \`${font.package}\``,
+    `- Bundled WOFF2 shards: ${fonts.filter((entry) => entry.family === font.family).length}`,
+    `- License: ${LICENSE.licenseName} ${LICENSE.licenseVersion} (\`${LICENSE.licenseId}\`)`,
+    `- License file: \`${font.licenseFile}\``,
+    `- License SHA-256: \`${font.licenseSha256}\``,
   ].join('\n'));
-  return `# Font and Asset Licenses\n\nGenerated from project-local pinned dependencies by \`npm run prepare\`.\n\n${sections.join('\n\n')}\n`;
+  return [
+    '# Font and Asset Licenses',
+    '',
+    'Generated from project-local pinned dependencies by `npm run prepare`.',
+    'Per-file font hashes are recorded in `font-license-manifest.json`.',
+    'Non-font asset rights and authorization are recorded in `asset-manifest.json`.',
+    '',
+    sections.join('\n\n'),
+    '',
+  ].join('\n');
+}
+
+async function writeText(project, destination, value) {
+  await publishProjectFile(project, destination, (temporary) => writeFile(temporary, value));
 }
 
 async function main() {
-  const { project } = parseArgs(process.argv.slice(2));
+  const parsed = parseArgs(process.argv.slice(2));
+  const project = await resolveProjectRoot(parsed.project);
   const fontsDirectory = path.join(project, 'assets', 'fonts');
   const licensesDirectory = path.join(project, 'assets', 'licenses');
-  await mkdir(fontsDirectory, { recursive: true });
-  await mkdir(licensesDirectory, { recursive: true });
+
+  const specs = [];
+  for (const fontPackage of FONT_PACKAGES) {
+    const css = await readFile(path.join(project, 'node_modules', fontPackage.cssSource), 'utf8');
+    specs.push(...parsePinnedFaces(css, fontPackage));
+  }
+  const destinations = [
+    ...specs.map((spec) => path.join(project, spec.file)),
+    ...FONT_PACKAGES.map((spec) => path.join(project, spec.licenseFile)),
+    path.join(project, 'font-faces.css'),
+    path.join(project, 'font-manifest.json'),
+    path.join(fontsDirectory, 'font-manifest.json'),
+    path.join(project, 'font-license-manifest.json'),
+    path.join(licensesDirectory, 'font-license-manifest.json'),
+    path.join(project, 'licenses.md'),
+  ];
+  for (const destination of destinations) {
+    await assertSafeDestinationPath(project, destination);
+  }
+  await ensureSafeDirectory(project, fontsDirectory);
+  await ensureSafeDirectory(project, licensesDirectory);
 
   const copiedLicenses = new Set();
   const fonts = [];
-  for (const spec of FONT_SPECS) {
+  for (const spec of specs) {
     const sourcePath = path.join(project, 'node_modules', spec.source);
     const targetPath = path.join(project, spec.file);
-    const licenseSourcePath = path.join(project, 'node_modules', spec.licenseSource);
-    const licenseTargetPath = path.join(project, spec.licenseFile);
-    await copyFile(sourcePath, targetPath);
+    await publishProjectFile(project, targetPath, (temporary) => copyFile(sourcePath, temporary));
     if (!copiedLicenses.has(spec.licenseFile)) {
-      await copyFile(licenseSourcePath, licenseTargetPath);
-      const actualLicenseSha256 = await sha256(licenseTargetPath);
-      if (actualLicenseSha256 !== spec.licenseSha256) {
-        throw new Error(`Pinned license hash mismatch for ${spec.family}: expected ${spec.licenseSha256}, got ${actualLicenseSha256}`);
+      const licenseSourcePath = path.join(project, 'node_modules', spec.licenseSource);
+      const licenseTargetPath = path.join(project, spec.licenseFile);
+      const actualSourceHash = await sha256(licenseSourcePath);
+      if (actualSourceHash !== spec.licenseSha256) {
+        throw new Error(`Pinned license hash mismatch for ${spec.family}: expected ${spec.licenseSha256}, got ${actualSourceHash}`);
       }
+      await publishProjectFile(project, licenseTargetPath, (temporary) => copyFile(licenseSourcePath, temporary));
       copiedLicenses.add(spec.licenseFile);
     }
+    const buffer = await readFile(targetPath);
     fonts.push({
       family: spec.family,
       file: relativePath(spec.file),
-      sha256: await sha256(targetPath),
+      sha256: createHash('sha256').update(buffer).digest('hex'),
       licenseFile: relativePath(spec.licenseFile),
-      samples: spec.samples,
+      unicodeRange: spec.unicodeRange,
+      samples: [explicitSample(buffer)],
+      package: spec.package,
+      licenseSha256: spec.licenseSha256,
+      style: spec.style,
+      weight: spec.weight,
     });
   }
 
-  const manifest = { version: 1, fonts };
+  const manifestFonts = fonts.map(({ package: _package, licenseSha256: _licenseSha256, style: _style, weight: _weight, ...font }) => font);
+  const manifest = { version: 2, fonts: manifestFonts };
   const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
   const licenseManifest = { version: 1, records: licenseRecords(fonts) };
   const licenseManifestText = `${JSON.stringify(licenseManifest, null, 2)}\n`;
-  await writeFile(path.join(fontsDirectory, 'font-manifest.json'), manifestText);
-  await writeFile(path.join(project, 'font-manifest.json'), manifestText);
-  await writeFile(path.join(licensesDirectory, 'font-license-manifest.json'), licenseManifestText);
-  await writeFile(path.join(project, 'font-license-manifest.json'), licenseManifestText);
-  await writeFile(path.join(project, 'licenses.md'), licensesMarkdown(fonts, licenseManifest.records));
+  await writeText(project, path.join(project, 'font-faces.css'), fontCss(fonts));
+  await writeText(project, path.join(fontsDirectory, 'font-manifest.json'), manifestText);
+  await writeText(project, path.join(project, 'font-manifest.json'), manifestText);
+  await writeText(project, path.join(licensesDirectory, 'font-license-manifest.json'), licenseManifestText);
+  await writeText(project, path.join(project, 'font-license-manifest.json'), licenseManifestText);
+  await writeText(project, path.join(project, 'licenses.md'), licensesMarkdown(fonts));
   process.stdout.write(`${JSON.stringify({ success: true, project, fonts: fonts.map(({ file }) => file) })}\n`);
 }
 

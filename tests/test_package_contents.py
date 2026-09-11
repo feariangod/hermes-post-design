@@ -20,7 +20,10 @@ FORBIDDEN_PARTS = {
 FORBIDDEN_NAMES = {"auth.json", "config.yaml", "qa-report.json", "render-result.json", "visual-review.json"}
 FORBIDDEN_SUFFIXES = (".db", ".log", ".pdf", ".png", ".sqlite", ".sqlite3")
 REQUIRED_POSTER_RESOURCES = (
+    "resources/skills/creative/poster-design/scripts/path-safety.mjs",
     "resources/skills/creative/poster-design/scripts/prepare-project.mjs",
+    "resources/skills/creative/poster-design/templates/poster-starter/asset-manifest.json",
+    "resources/skills/creative/poster-design/templates/poster-starter/font-faces.css",
     "resources/skills/creative/poster-design/templates/poster-starter/font-manifest.json",
     "resources/skills/creative/poster-design/templates/poster-starter/package-lock.json",
     "resources/skills/creative/poster-design/templates/poster-starter/poster.json",

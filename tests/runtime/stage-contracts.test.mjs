@@ -10,6 +10,8 @@ const contract = await import(path.join(
 ));
 const validatePosterState = contract.validatePosterState ?? (() => []);
 const validatePublishQa = contract.validatePublishQa ?? (() => []);
+const validateBrief = contract.validateBrief ?? (() => []);
+const validateConfig = contract.validateConfig ?? (() => []);
 
 function posterState(overrides = {}) {
   return {
@@ -114,6 +116,34 @@ test('poster state accepts an authorized external provider within budget', () =>
       usedCalls: 1,
     },
   })), []);
+});
+
+test('poster state requires approved copy after intake', () => {
+  const issues = validatePosterState(posterState({
+    state: 'route_selected',
+    direction: 'approved direction',
+  }));
+  assert.ok(issues.some((issue) => /approvedCopy.*after intake/i.test(issue)), issues.join('\n'));
+});
+
+test('poster state remains the sole stage authority', () => {
+  const configIssues = validateConfig({
+    title: 'Poster',
+    status: 'final',
+    mode: 'release',
+    state: 'release',
+    canvas: { type: 'digital', width: 1080, height: 1440 },
+  });
+  const briefIssues = validateBrief({
+    status: 'final',
+    mode: 'release',
+    state: 'release',
+    approvedCopy: ['Duplicate authority'],
+    facts: [],
+    qrCodes: [],
+  });
+  assert.ok(configIssues.some((issue) => /poster\.json.*stage authority/i.test(issue)), configIssues.join('\n'));
+  assert.ok(briefIssues.some((issue) => /poster\.json.*stage authority/i.test(issue)), briefIssues.join('\n'));
 });
 
 test('publish QA accepts the explicit all-pending starter state', () => {

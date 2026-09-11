@@ -118,9 +118,9 @@ npm ci
 npm run prepare
 ```
 
-`npm ci` belongs inside each initialized project. It materializes pinned fonts, local license evidence, Playwright, and inspection dependencies without relying on the source checkout.
+`npm ci` belongs inside each initialized project. It materializes pinned Fontsource packages, Playwright, and inspection dependencies without relying on the source checkout. `npm run prepare` then copies the complete pinned WOFF2 shard sets, their `unicode-range` declarations, and license files into the project. Rendering and inspection make no network calls.
 
-The project starts in `intake` with provider `deterministic-local`, `external=false`, `billed=false`, and zero authorized or used calls. Update `brief.json`, `poster.html`, `styles.css`, and `poster.json` as the work advances. Then render and inspect:
+The project starts in `intake` with provider `deterministic-local`, `external=false`, `billed=false`, and zero authorized or used calls. `poster.json` is the sole workflow-stage and approved-copy authority. `brief.json` owns facts and QR destinations; every visible Release string must use `data-copy` or `data-fact`. Record every non-font file below `assets/` in `asset-manifest.json`; the starter's empty manifest is valid when no external assets are used. Update `poster.html`, `styles.css`, and those contracts as the work advances. Then render and inspect:
 
 ```bash
 npm run render
@@ -186,7 +186,7 @@ node --test tests/runtime/*.test.mjs
 git diff --check
 ```
 
-The forward-test evaluator checks the PNG signature and IHDR dimensions, recorded artifact/source/evidence hashes, visible awaiting-confirmation source label, Concept state, deterministic-local provider counters, and absence of positive Publish or Release readiness claims.
+The forward-test evaluator checks the PNG signature and dimensions, rejects blank or nearly uniform pixels, independently re-renders the deterministic SVG with a trusted local Playwright renderer, requires exact RGBA pixel-hash parity, verifies the visible awaiting-confirmation source label and Concept state, checks deterministic-local provider counters, and rejects positive Publish or Release readiness claims.
 
 CI runs Python `3.11`, `3.12`, and `3.13`; Node `22`; clean and deliberately polluted wheel comparisons; Git-tracked canonical Skill file/hash parity; and isolated install/restore smoke tests for all four host targets. Test adapters and image results are deterministic local fixtures. They do not submit paid or external requests.
 

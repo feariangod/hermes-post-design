@@ -6,11 +6,12 @@ import sys
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 EVALUATOR = REPOSITORY_ROOT / "tests/evaluate_forward_test.py"
+SOURCE_RENDERER = REPOSITORY_ROOT / "tests/render_forward_source.mjs"
 
 
 def _sha256(path: Path) -> str:
@@ -41,17 +42,37 @@ def _refresh_evidence_hashes(workdir: Path) -> None:
 def _make_valid_fixture(workdir: Path) -> None:
     artifacts = workdir / "artifacts"
     artifacts.mkdir(parents=True)
-    Image.new("RGB", (1080, 1920), (20, 60, 80)).save(
-        artifacts / "concept.png", format="PNG"
-    )
-    Image.new("RGB", (360, 640), (20, 60, 80)).save(
-        artifacts / "concept-phone.png", format="PNG"
-    )
     (artifacts / "concept.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">'
-        '<text x="100" y="1400">AWAITING CONFIRMATION</text></svg>\n',
+        '<rect width="1080" height="1920" fill="#f0ebdc"/>'
+        '<rect x="80" y="100" width="920" height="1080" fill="#143c50"/>'
+        '<rect x="80" y="1260" width="920" height="320" fill="#be462d"/>'
+        '<text x="100" y="1400" fill="#ffffff" font-size="54">AWAITING CONFIRMATION</text>'
+        '</svg>\n',
         encoding="utf-8",
     )
+    rendered = subprocess.run(
+        [
+            "node",
+            str(SOURCE_RENDERER),
+            "--source",
+            str(artifacts / "concept.svg"),
+            "--output",
+            str(artifacts / "concept.png"),
+            "--width",
+            "1080",
+            "--height",
+            "1920",
+        ],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert rendered.returncode == 0, rendered.stdout + rendered.stderr
+    with Image.open(artifacts / "concept.png") as concept:
+        concept.resize((360, 640)).save(
+            artifacts / "concept-phone.png", format="PNG"
+        )
     _write_json(
         workdir / "poster.json",
         {
@@ -139,6 +160,7 @@ def test_forward_evaluator_accepts_complete_concept_evidence(tmp_path):
     assert result["success"] is True
     assert result["artifact"]["dimensions"] == {"width": 1080, "height": 1920}
     assert result["visible_label"] == "AWAITING CONFIRMATION"
+    assert result["render_provenance"]["matches"] is True
     assert set(result["verified_hashes"]) == {"artifact", "source", "phone_scale_review"}
 
 
@@ -149,6 +171,8 @@ def test_forward_evaluator_accepts_complete_concept_evidence(tmp_path):
         ("wrong_dimensions", "artifact PNG IHDR must be exactly 1080x1920"),
         ("source_hash", "source sha256 does not match"),
         ("hidden_label", "source does not contain a visible awaiting-confirmation label"),
+        ("uniform_png", "artifact PNG must contain non-uniform visible content"),
+        ("unrelated_png", "artifact pixels do not match the deterministic source render"),
         ("publish_state", "poster mode must be concept"),
         ("used_call", "provider usedCalls must be 0"),
         ("readiness_claim", "Publish or Release readiness claim"),
@@ -188,6 +212,18 @@ def test_forward_evaluator_rejects_controlled_mutations(
             '<text x="100" y="1400" display="none">AWAITING CONFIRMATION</text></svg>\n',
             encoding="utf-8",
         )
+        _refresh_evidence_hashes(workdir)
+    elif mutation == "uniform_png":
+        Image.new("RGB", (1080, 1920), (20, 60, 80)).save(
+            workdir / "artifacts/concept.png", format="PNG"
+        )
+        _refresh_evidence_hashes(workdir)
+    elif mutation == "unrelated_png":
+        artifact = Image.new("RGB", (1080, 1920), (230, 230, 230))
+        drawing = ImageDraw.Draw(artifact)
+        for x in range(0, 1080, 80):
+            drawing.rectangle((x, 0, x + 40, 1920), fill=(25, 90, 130))
+        artifact.save(workdir / "artifacts/concept.png", format="PNG")
         _refresh_evidence_hashes(workdir)
     elif mutation == "publish_state":
         poster["mode"] = "publish"

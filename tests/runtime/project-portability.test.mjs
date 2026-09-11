@@ -32,7 +32,7 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
 
   run('node', [initPoster, '--output', project, '--title', 'Portable poster', '--type', 'digital']);
 
-  for (const relativePath of ['poster.json', 'publish-qa.json', 'package.json', 'package-lock.json', 'font-manifest.json']) {
+  for (const relativePath of ['poster.json', 'publish-qa.json', 'asset-manifest.json', 'package.json', 'package-lock.json', 'font-manifest.json']) {
     await access(path.join(project, relativePath));
   }
 
@@ -65,6 +65,10 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
     mobile: 'PENDING',
     artifacts: 'PENDING',
   });
+  assert.deepEqual(JSON.parse(await readFile(path.join(project, 'asset-manifest.json'), 'utf8')), {
+    version: 1,
+    assets: [],
+  });
   const starterHtml = await readFile(path.join(project, 'poster.html'), 'utf8');
   assert.match(starterHtml, /data-placeholder="starter-preview"[^>]*>PREVIEW</);
   assert.match(starterHtml, /data-placeholder="starter-copy"[^>]*>Replace this starter content after the brief is approved\.</);
@@ -77,17 +81,23 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
   const manifest = JSON.parse(await readFile(path.join(project, 'assets/fonts/font-manifest.json'), 'utf8'));
   assert.deepEqual(JSON.parse(await readFile(path.join(project, 'font-manifest.json'), 'utf8')), manifest);
   assert.ok(Array.isArray(manifest.fonts));
-  assert.ok(manifest.fonts.length > 0);
-  assert.deepEqual(
-    manifest.fonts.filter((font) => font.file.includes('Chinese')).map((font) => font.samples),
-    [['中文海报'], ['中'], ['中']],
-  );
+  const pinnedCssFiles = [
+    'node_modules/@fontsource/ma-shan-zheng/400.css',
+    'node_modules/@fontsource-variable/noto-sans-sc/wght.css',
+    'node_modules/@fontsource-variable/noto-serif-sc/wght.css',
+  ];
+  const expectedFaceCount = (await Promise.all(pinnedCssFiles.map(async (relative) =>
+    (await readFile(path.join(project, relative), 'utf8')).match(/@font-face\s*\{/g)?.length ?? 0
+  ))).reduce((total, count) => total + count, 0);
+  assert.equal(manifest.fonts.length, expectedFaceCount);
+  assert.ok(manifest.fonts.length > 250);
   for (const font of manifest.fonts) {
-    assert.deepEqual(Object.keys(font).sort(), ['family', 'file', 'licenseFile', 'samples', 'sha256']);
+    assert.deepEqual(Object.keys(font).sort(), ['family', 'file', 'licenseFile', 'samples', 'sha256', 'unicodeRange']);
     assert.equal(typeof font.family, 'string');
     assert.equal(typeof font.file, 'string');
     assert.equal(typeof font.sha256, 'string');
     assert.equal(typeof font.licenseFile, 'string');
+    assert.match(font.unicodeRange, /^U\+[0-9a-f]/i);
     assert.ok(Array.isArray(font.samples));
     assert.doesNotMatch(font.samples.join(''), /\\u[0-9a-f]{4}/i);
     const fontPath = path.join(project, font.file);
@@ -129,7 +139,8 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
     assert.equal(await sha256(path.join(project, record.licenseFile)), record.licenseSha256);
   }
 
-  const css = await readFile(path.join(project, 'styles.css'), 'utf8');
+  const css = await readFile(path.join(project, 'font-faces.css'), 'utf8');
+  assert.match(await readFile(path.join(project, 'styles.css'), 'utf8'), /@import\s+url\(["']font-faces\.css["']\)/);
   for (const font of manifest.fonts) {
     assert.match(css, new RegExp(font.file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }

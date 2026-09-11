@@ -53,7 +53,7 @@ Concept always uses the requested final size and attempts to look near-productio
 
 ## Fact contract
 
-Before Concept generation, record approved readable copy and critical facts in `poster.json` or `brief.json`: names, dates, times, prices, places, contacts, URLs, QR destinations, claims, scientific values, units, and rules. Mark unresolved entries explicitly. Concept may use only an approved neutral placeholder or an empty reserved zone for unresolved facts; any unresolved critical fact blocks `publish-ready`.
+Before Concept generation, record every approved readable string in `poster.json.approvedCopy` and record critical facts in `brief.json`: names, dates, times, prices, places, contacts, URLs, QR destinations, claims, scientific values, units, and rules. Mark unresolved entries explicitly. Concept may use only an approved neutral placeholder or an empty reserved zone for unresolved facts; any unresolved critical fact blocks advancement to Publish.
 
 Readable generated text is not factual verification. A clear but incorrect claim remains a failure.
 

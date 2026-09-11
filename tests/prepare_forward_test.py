@@ -61,6 +61,10 @@ def _evidence_contract(skill: Path, workdir: Path) -> dict:
                 "verification.json must record matching byte_size and sha256 for "
                 "the artifact, deterministic source, and any phone-scale evidence"
             ),
+            "render_provenance": (
+                "the evaluator independently re-renders the SVG with its trusted "
+                "local renderer and requires exact RGBA pixel-hash parity with the PNG"
+            ),
             "visible_label": (
                 "poster.json label and a visible in-canvas SVG text element must "
                 "contain awaiting confirmation"

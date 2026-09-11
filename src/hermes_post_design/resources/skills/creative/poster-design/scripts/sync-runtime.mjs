@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDir, '..');
-const runtimeNames = ['browser-paths.mjs', 'poster-contract.mjs', 'prepare-project.mjs', 'render-poster.mjs', 'inspect-poster.mjs', 'record-visual-review.mjs'];
+const runtimeNames = ['browser-paths.mjs', 'path-safety.mjs', 'poster-contract.mjs', 'prepare-project.mjs', 'render-poster.mjs', 'inspect-poster.mjs', 'record-visual-review.mjs'];
 const targetDirectories = [
   path.join(root, 'templates', 'poster-starter', 'scripts'),
 ];

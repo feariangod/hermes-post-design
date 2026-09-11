@@ -29,7 +29,7 @@ Phone-scale review must show that the call to action and critical facts remain r
 
 ## Release license policy
 
-Release projects use commercially usable open-source fonts. Bundle each required font file and complete license in `assets/fonts/` and `assets/licenses/`. Record family, upstream URL, release/version, license, file name, and SHA-256 in `licenses.md`.
+Release projects use commercially usable open-source fonts. `npm run prepare` copies every WOFF2 shard and `unicode-range` declaration from the pinned Fontsource packages into `assets/fonts/` and writes exact file hashes to `font-manifest.json`. Complete license files and per-file bindings live in `assets/licenses/` and `font-license-manifest.json`; `licenses.md` is the human-readable summary.
 
 Do not rely on online fonts, CSS imports, or fonts installed only on the current machine. System fallback blocks Release final eligibility.
 
@@ -50,4 +50,4 @@ CSS/SVG may add foil, stroke, shadow, emboss, seals, brush masks, and texture. K
 
 ## Glyph coverage
 
-Before Release final render, verify every character is available in the declared font. Missing CJK glyphs, tofu boxes, mixed fallback, or altered punctuation block final eligibility.
+Before Release final render, bind every readable DOM string with `data-copy` or `data-fact`. The inspector reads the computed first-choice family for every visible text run and verifies every glyph-bearing code point against the union of that family's pinned project-local binaries. Fixed sample strings are only manifest sanity checks; they never substitute for coverage of the actual poster. Missing CJK glyphs, tofu boxes, mixed fallback, or altered punctuation block final eligibility.

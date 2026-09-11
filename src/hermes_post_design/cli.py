@@ -1,4 +1,4 @@
-"""Command-line interface for Chiyi image generation and Hermes resource sync."""
+"""Command-line interface for portable Skill installs and optional Chiyi images."""
 from __future__ import annotations
 
 import argparse
@@ -13,6 +13,15 @@ from hermes_post_design.chiyi_core import ChiyiClient
 from hermes_post_design.chiyi_core.models import EditRequest, GenerateRequest, ImageSource
 from hermes_post_design.install import apply_install, plan_install
 from hermes_post_design.sync import apply_sync, plan_sync, restore_backup
+
+
+class CliArgumentError(ValueError):
+    """Raised instead of allowing argparse to terminate before JSON handling."""
+
+
+class CliArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise CliArgumentError(message)
 
 
 def _result_payload(result) -> dict:
@@ -150,7 +159,7 @@ def _command_restore(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="hermes-post-design")
+    parser = CliArgumentParser(prog="hermes-post-design")
     sub = parser.add_subparsers(dest="command", required=True)
 
     generate = sub.add_parser("generate", help="Generate one image with Chiyi")
@@ -196,11 +205,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
-    args = build_parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    as_json = "--json" in arguments
     try:
+        args = build_parser().parse_args(arguments)
         return args.handler(args)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+    except CliArgumentError as exc:
+        payload = {"success": False, "error": {"type": "argument_error", "message": str(exc)}}
+        if as_json:
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        payload = {"success": False, "error": {"type": "operation_error", "message": str(exc)}}
+        if as_json:
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
         return 2
 
 

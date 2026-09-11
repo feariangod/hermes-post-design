@@ -28,7 +28,7 @@ A Publish PNG passes when:
 
 ### Content
 
-- every critical fact matches `poster.json` or `brief.json` after Unicode and whitespace normalization;
+- every critical fact matches `brief.json`, while workflow stage and approved readable copy come only from `poster.json`;
 - generated text retained in the final image has been checked character by character;
 - no unresolved name, date, time, place, price, URL, rule, contact, claim, label, or disclaimer remains;
 - readable generated professional or scientific copy has independent factual support.
@@ -74,7 +74,8 @@ Release retains the existing strict publication engine. A final Release poster p
 
 - All images decode and have sufficient source resolution.
 - Identity-bearing images use authorized sources.
-- Fonts and external assets are documented in `licenses.md`.
+- Fonts are bound by the font manifests and pinned license policy; every non-font asset is bound by `asset-manifest.json`.
+- Every visible Release string is bound by `data-copy` or `data-fact`, and the complete visible `data-copy` multiset matches `poster.json.approvedCopy`.
 - Every `file:` resource stays inside the project; resource symlinks and network resources are blocked.
 - Project HTML is static; active content and external requests are rejected.
 
@@ -87,12 +88,12 @@ Release retains the existing strict publication engine. A final Release poster p
 
 ### Visual evidence
 
-Use `vision_analyze` on target and mobile outputs. Record an all-PASS `visual-review.json` with `record-visual-review.mjs`; re-rendering makes it stale. Final eligibility requires final status in `poster.config.json`, `brief.json`, and `data-poster-status`, plus matching current hashes in `qa-report.md`.
+Use the selected host adapter's compatible visual-analysis capability, or direct human-visible review, on target and mobile outputs. Record an all-PASS `visual-review.json` with `record-visual-review.mjs`; re-rendering makes it stale. Final eligibility requires `poster.json` mode/state `release`, a PASS Publish contract, and matching current hashes in `qa-report.md`.
 
 Automated PASS is not final status. `visual-review.json` is an audit declaration, not cryptographic reviewer authentication.
 
 ## Release blocking codes
 
-`CONFIG_INVALID`, `BRIEF_INVALID`, `ACTIVE_CONTENT`, `ASSET_OUTSIDE_PROJECT`, `EXTERNAL_RESOURCE_BLOCKED`, `UNRESOLVED_PLACEHOLDER`, `ELEMENT_OVERFLOW`, `MIN_FONT_SIZE`, `MOBILE_CRITICAL_SIZE`, `BROKEN_IMAGE`, `UNDECLARED_FONT`, `FONT_LOAD_FAILED`, `FACT_CARDINALITY`, `FACT_MISMATCH`, `FACT_NOT_VISIBLE`, `FACT_UNDECLARED`, `QR_CARDINALITY`, `QR_NOT_VISIBLE`, `QR_UNDECLARED`, `QR_DECODE_FAILED`, `QR_PAYLOAD_MISMATCH`, `QR_TOO_SMALL`, `QR_MOBILE_TOO_SMALL`, `SOURCE_MISSING`, `SOURCE_INVALID`, `RENDER_MANIFEST_INVALID`, `SOURCE_HASH_MISMATCH`, `OUTPUT_HASH_MISMATCH`, `OUTPUT_MISSING`, `OUTPUT_EMPTY`, `OUTPUT_INVALID`, `OUTPUT_BLANK`, `OUTPUT_STALE`, `PNG_SIZE_MISMATCH`, `MOBILE_SIZE_MISMATCH`, `PDF_PAGE_COUNT`, `PDF_SIZE_MISMATCH`, `STATUS_NOT_FINAL`, `VISUAL_REVIEW_MISSING`, `VISUAL_REVIEW_INVALID`, `VISUAL_REVIEW_STALE`, `VISUAL_REVIEW_FAILED`, `QA_NARRATIVE_STALE`.
+`CONFIG_INVALID`, `BRIEF_INVALID`, `POSTER_STATE_INVALID`, `PUBLISH_QA_INVALID`, `ACTIVE_CONTENT`, `ASSET_OUTSIDE_PROJECT`, `EXTERNAL_RESOURCE_BLOCKED`, `ASSET_LICENSE_INVALID`, `ASSET_LICENSE_MISSING`, `ASSET_HASH_MISMATCH`, `UNRESOLVED_PLACEHOLDER`, `COPY_MISMATCH`, `COPY_UNBOUND`, `COPY_NOT_VISIBLE`, `ELEMENT_OVERFLOW`, `MIN_FONT_SIZE`, `MOBILE_CRITICAL_SIZE`, `BROKEN_IMAGE`, `UNDECLARED_FONT`, `FONT_SOURCE_INVALID`, `FONT_MANIFEST_INVALID`, `FONT_MANIFEST_MISMATCH`, `FONT_FILE_MISSING`, `FONT_PATH_INVALID`, `FONT_HASH_MISMATCH`, `FONT_BINARY_INVALID`, `FONT_BINARY_FAMILY_MISMATCH`, `FONT_GLYPH_MISSING`, `FONT_POSTER_GLYPH_MISSING`, `FONT_LICENSE_MISSING`, `FONT_LICENSE_BINDING_MISMATCH`, `FONT_LOAD_FAILED`, `FACT_CARDINALITY`, `FACT_MISMATCH`, `FACT_NOT_VISIBLE`, `FACT_UNDECLARED`, `QR_CARDINALITY`, `QR_NOT_VISIBLE`, `QR_UNDECLARED`, `QR_DECODE_FAILED`, `QR_PAYLOAD_MISMATCH`, `QR_TOO_SMALL`, `QR_MOBILE_TOO_SMALL`, `SOURCE_MISSING`, `SOURCE_INVALID`, `RENDER_MANIFEST_INVALID`, `SOURCE_HASH_MISMATCH`, `OUTPUT_HASH_MISMATCH`, `OUTPUT_MISSING`, `OUTPUT_EMPTY`, `OUTPUT_INVALID`, `OUTPUT_BLANK`, `OUTPUT_STALE`, `PNG_SIZE_MISMATCH`, `MOBILE_SIZE_MISMATCH`, `PDF_PAGE_COUNT`, `PDF_SIZE_MISMATCH`, `STATUS_NOT_FINAL`, `PUBLISH_QA_NOT_PASS`, `VISUAL_REVIEW_MISSING`, `VISUAL_REVIEW_INVALID`, `VISUAL_REVIEW_STALE`, `VISUAL_REVIEW_FAILED`, `QA_NARRATIVE_STALE`.
 
 Optional facts and QR entries may be absent in Release only when their absence is declared; duplicate keys remain blocking cardinality failures.

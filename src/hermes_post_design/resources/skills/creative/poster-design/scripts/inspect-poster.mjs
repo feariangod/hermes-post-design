@@ -7,7 +7,7 @@ import jsQR from 'jsqr';
 import { PDFDocument } from 'pdf-lib';
 import { PNG } from 'pngjs';
 import { resolveExecutable } from './browser-paths.mjs';
-import { collectProjectSourceHashes, derivePublishQaApplicability, installProjectResourceBoundary, isFinalStatus, validateBrief, validateConfig, validateFontManifest, validatePosterState, validatePublishQa, validateStaticHtml } from './poster-contract.mjs';
+import { collectProjectSourceHashes, derivePublishQaApplicability, installProjectResourceBoundary, validateAssetManifest, validateBrief, validateConfig, validateFontManifest, validatePosterState, validatePublishQa, validateRenderedGlyphCoverage, validateStaticHtml } from './poster-contract.mjs';
 
 function parseArgs(argv) {
   const flags = new Set();
@@ -113,10 +113,17 @@ function pngContentEvidence(png, maxSamples = 20_000) {
 
 async function sourceDetails(project, blockers) {
   const files = [
+    path.join(project, 'asset-manifest.json'),
     path.join(project, 'poster.html'),
     path.join(project, 'styles.css'),
+    path.join(project, 'font-faces.css'),
     path.join(project, 'brief.json'),
     path.join(project, 'poster.config.json'),
+    path.join(project, 'poster.json'),
+    path.join(project, 'publish-qa.json'),
+    path.join(project, 'font-manifest.json'),
+    path.join(project, 'font-license-manifest.json'),
+    path.join(project, 'licenses.md'),
   ];
 
   async function walk(directory) {
@@ -429,6 +436,7 @@ function runtimeFailure(stage, error) {
     NAVIGATION_FAILED: 'The poster document could not be loaded.',
     FONT_LOAD_FAILED: 'Required bundled fonts could not be evaluated.',
     FONT_VALIDATION_FAILED: 'Bundled font files or manifests could not be validated.',
+    ASSET_VALIDATION_FAILED: 'Non-font asset licenses and authorization could not be validated.',
     PUBLISH_QA_VALIDATION_FAILED: 'Publish QA applicability could not be validated.',
     PAGE_EVALUATION_FAILED: 'The rendered poster could not be evaluated.',
     OUTPUT_INSPECTION_FAILED: 'Rendered output inspection could not be completed.',
@@ -483,6 +491,7 @@ async function main() {
   const posterState = await readRequiredJson(project, 'poster.json', blockers);
   const publishQa = await readRequiredJson(project, 'publish-qa.json', blockers);
   const fontManifest = await readRequiredJson(project, 'font-manifest.json', blockers);
+  const assetManifest = await readRequiredJson(project, 'asset-manifest.json', blockers);
   if (posterState) {
     const issues = validatePosterState(posterState);
     if (issues.length) blockers.push(finding('POSTER_STATE_INVALID', 'poster.json violates the workflow state contract.', { issues }));
@@ -499,6 +508,8 @@ async function main() {
   let runtimeStage = 'FONT_VALIDATION_FAILED';
   try {
     if (strict && fontManifest) blockers.push(...await validateFontManifest(project, fontManifest));
+    runtimeStage = 'ASSET_VALIDATION_FAILED';
+    if (strict && assetManifest) blockers.push(...await validateAssetManifest(project, assetManifest));
     runtimeStage = 'BROWSER_RESOLUTION_FAILED';
     const viewport = viewportFor(config.canvas);
     const executablePath = await resolveExecutable(values.browser);
@@ -614,6 +625,23 @@ async function main() {
           && box.left < (poster?.getBoundingClientRect().right ?? window.innerWidth)
           && box.top < (poster?.getBoundingClientRect().bottom ?? document.documentElement.scrollHeight);
       };
+      const textRuns = nodes.flatMap((element) => {
+        const text = element.children.length === 0 ? element.textContent?.trim() ?? '' : '';
+        if (!text || !visibility(element)) return [];
+        return [{
+          tag: element.tagName,
+          text: text.normalize('NFC'),
+          fontFamily: getComputedStyle(element).fontFamily,
+          copyBound: Boolean(element.closest('[data-copy]')),
+          factBound: Boolean(element.closest('[data-fact]')),
+        }];
+      });
+      const copyBindings = [...document.querySelectorAll('[data-copy]')].map((element) => ({
+        tag: element.tagName,
+        text: (element.innerText ?? element.textContent ?? '').trim().normalize('NFC'),
+        visible: visibility(element),
+      }));
+      const unboundText = textRuns.filter((run) => !run.copyBound && !run.factBound);
       const facts = [...document.querySelectorAll('[data-fact]')].map((element) => ({
         key: element.dataset.fact,
         value: element.textContent?.trim() ?? '',
@@ -642,6 +670,9 @@ async function main() {
         undersizedMobileText,
         images,
         fonts: [...fonts],
+        textRuns,
+        copyBindings,
+        unboundText,
         facts,
         qrCodes,
         identityCount: document.querySelectorAll('[data-identity], [class*="identity" i], [id*="identity" i], [class*="portrait" i], [id*="portrait" i], [class*="speaker" i], [id*="speaker" i], img[alt*="portrait" i], img[alt*="speaker" i], img[src*="portrait" i], img[src*="speaker" i]').length,
@@ -657,19 +688,10 @@ async function main() {
       if (issues.length) blockers.push(finding('PUBLISH_QA_INVALID', 'publish-qa.json violates the mechanically derived Publish QA contract.', { issues, applicability }));
     }
 
-    const manifestFonts = Array.isArray(fontManifest?.fonts) ? fontManifest.fonts : [];
-    const requiredFonts = manifestFonts.flatMap((font) =>
-      typeof font?.family === 'string' && Array.isArray(font.samples)
-        ? font.samples.filter((sample) => typeof sample === 'string' && sample.length > 0)
-          .map((sample) => ({ family: font.family, sample }))
-        : []);
-    if (requiredFonts.length === 0) {
-      requiredFonts.push(
-        { family: 'Noto Sans SC', sample: '海报 Poster 2026' },
-        { family: 'Noto Serif SC', sample: '科研 商业 会议' },
-        { family: 'Ma Shan Zheng', sample: '国风书法 AI' },
-      );
-    }
+    const requiredFonts = [...new Map(result.textRuns.map((run) => {
+      const family = String(run.fontFamily ?? '').split(',')[0].trim().replace(/^['"]|['"]$/g, '');
+      return [`${family}\0${run.text}`, { family, sample: run.text }];
+    })).values()];
     const loadedFonts = [];
     const failedFonts = [];
     runtimeStage = 'FONT_LOAD_FAILED';
@@ -687,6 +709,32 @@ async function main() {
     runtimeStage = 'PAGE_EVALUATION_FAILED';
     if (strict && failedFonts.length) {
       blockers.push(finding('FONT_LOAD_FAILED', 'One or more required bundled fonts failed to load.', { failedFonts }));
+    }
+    if (strict && fontManifest) {
+      blockers.push(...await validateRenderedGlyphCoverage(project, fontManifest, result.textRuns));
+    }
+
+    if (finalRequested && posterState) {
+      const approvedCopy = (Array.isArray(posterState.approvedCopy) ? posterState.approvedCopy : [])
+        .map((value) => value.normalize('NFC').trim())
+        .sort();
+      const visibleBindings = result.copyBindings.filter((binding) => binding.visible);
+      const actualCopy = visibleBindings.map((binding) => binding.text).sort();
+      const hiddenBindings = result.copyBindings.filter((binding) => !binding.visible);
+      if (hiddenBindings.length) {
+        blockers.push(finding('COPY_NOT_VISIBLE', 'Every data-copy binding must be visibly rendered in Release.', { items: hiddenBindings }));
+      }
+      if (JSON.stringify(actualCopy) !== JSON.stringify(approvedCopy)) {
+        blockers.push(finding('COPY_MISMATCH', 'Visible data-copy text must match poster.json approvedCopy exactly.', {
+          approved: approvedCopy,
+          actual: actualCopy,
+        }));
+      }
+      if (result.unboundText.length) {
+        blockers.push(finding('COPY_UNBOUND', 'Every readable Release string must be bound by data-copy or data-fact.', {
+          items: result.unboundText.slice(0, 50),
+        }));
+      }
     }
 
     if (result.posterCount !== 1) blockers.push(finding('POSTER_ROOT', 'Expected exactly one #poster root.', { count: result.posterCount }));
@@ -778,19 +826,14 @@ async function main() {
     let visualReviewEvidence = null;
     if (finalRequested) {
       const declaredStatuses = {
-        config: config.status,
-        brief: brief.status,
-        poster: result.posterStatus,
         workflowMode: posterState?.mode,
         workflowState: posterState?.state,
         publishQa: publishQa?.status,
       };
       const workflowFinal = posterState?.mode === 'release' && posterState?.state === 'release';
       const publishPassed = publishQa?.status === 'PASS';
-      const statusNonFinal = Object.entries({ config: config.status, brief: brief.status, poster: result.posterStatus })
-        .filter(([, value]) => !isFinalStatus(value));
-      if (statusNonFinal.length || !workflowFinal) {
-        blockers.push(finding('STATUS_NOT_FINAL', 'Final QA requires final status plus release workflow mode and state.', { declaredStatuses, nonFinal: statusNonFinal, workflowFinal }));
+      if (!workflowFinal) {
+        blockers.push(finding('STATUS_NOT_FINAL', 'Final QA requires poster.json release workflow mode and state.', { declaredStatuses, workflowFinal }));
       }
       if (!publishPassed) blockers.push(finding('PUBLISH_QA_NOT_PASS', 'Final QA requires publish-qa.json status PASS.', { status: publishQa?.status ?? null }));
       visualReviewEvidence = await inspectVisualReview(project, outputPaths, blockers);

@@ -54,7 +54,9 @@ State the roles in the prompt. Validate that prohibited geometry, logos, or iden
 
 ## External and project assets
 
-Record source path/URL, creator, license, modification, and attribution requirement for every authorized asset used in Release. Final deterministic layers use project-local assets. Do not add executable scripts, inline event handlers, active embedded documents, or remote runtime dependencies to project HTML. Keep generated images and source assets inside the project/archive directory.
+Every non-font file below `assets/` used in Release must have exactly one record in `asset-manifest.json`. Each record contains exactly `path`, `sha256`, `source`, `creator`, `license`, `authorization`, and `attribution`, all bound to the current project-local file. The validator rejects missing files, unrecorded files, duplicate paths, incomplete rights metadata, symlinks, and hash drift. A starter project with no non-font assets uses `{ "version": 1, "assets": [] }` and remains fully usable.
+
+Final deterministic layers use project-local assets. Do not add executable scripts, inline event handlers, active embedded documents, or remote runtime dependencies to project HTML. Keep generated images and source assets inside the project/archive directory. `font-manifest.json` and `font-license-manifest.json` remain the separate machine-readable contract for bundled fonts.
 
 ## Resolution and cropping
 

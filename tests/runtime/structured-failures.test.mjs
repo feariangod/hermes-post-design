@@ -75,6 +75,9 @@ const page = {
         undersizedMobileText: [],
         images: [],
         fonts: [],
+        textRuns: [],
+        copyBindings: [],
+        unboundText: [],
         facts: [{ key: 'title', value: 'Mock poster', visible: true }],
         qrCodes: [],
       };
