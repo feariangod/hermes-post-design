@@ -1,69 +1,88 @@
-# 仓库基线审计与本轮开发边界
+# Repository Architecture And Audit Boundary
 
-## 审计目的
+## Audit Date And Scope
 
-本文档记录 hermes-post-design 私有仓库的基线状态，确保后续开发工作在受控环境中进行，防止敏感信息泄露，维护代码库的整洁性和安全性。
+This document describes the repository architecture as of 2026-09-11 on the implementation branch `codex/portable-poster-skill`. It replaces the pre-feature baseline that described a two-file repository without tests or CI.
 
-## 仓库基本信息
+The current repository is a portable Agent Skill and deterministic poster runtime with an optional Hermes-specific Chiyi adapter. This audit records the code and verification boundary; it is not evidence that the Skill has been deployed to a live host or that any poster is Publish or Release ready.
 
-- **远程仓库**: https://github.com/feariangod/hermes-post-design.git
-- **默认分支**: main
-- **基线提交**: 9e6632e
-- **当前工作分支**: feature/chiyi-hermes-poster-workflow
+## Current Components
 
-## 现有文件
+- `src/hermes_post_design/install.py`: target-aware dry-run, transactional install, backup, and restore for Agents, Codex, Claude, and Hermes.
+- `src/hermes_post_design/resources/skills/creative/poster-design`: canonical portable Skill, references, starter project, pinned Node runtime, and QA scripts.
+- `src/hermes_post_design/chiyi_core`: platform-neutral optional Chiyi client with bounded requests, source validation, artifact normalization, and redacted errors.
+- `src/hermes_post_design/resources/plugins/image_gen/chiyi`: thin Hermes provider over the shared client.
+- `src/hermes_post_design/resources/skills/media/chiyi-image-generation`: Hermes-only image-generation Skill.
+- `tests`: Python contract, installer, packaging, client, provider, and zero-network fixture coverage plus Node runtime integration tests.
+- `.github/workflows/ci.yml`: Python 3.11-3.13, Node 22, wheel, and four-target installer verification.
 
-- `README.md` - 项目说明文档
-- `LICENSE` - MIT 许可证
+## Installation Boundary
 
-## 许可证保留
+The generic installer manages only these target paths:
 
-本项目采用 MIT LICENSE。本轮实施将保留现有许可证文件。未来如需更改许可证，由版权持有人另行决定。
+```text
+agents: skills/poster-design
+codex:  skills/poster-design
+claude: skills/poster-design
+hermes: skills/creative/poster-design
+        skills/media/chiyi-image-generation
+        plugins/image_gen/chiyi
+```
 
-## 项目结构
+Planning is read-only. Apply stages filtered resources, backs up prior managed paths under the selected temporary or host home, and replaces them transactionally. Restore accepts only a target-matched backup below that same home's application backup directory. Parent and resource symlink escapes are rejected.
 
-项目直接使用仓库根目录，无额外嵌套结构。当前不存在以下内容：
+No installer path writes host credentials, `.env`, provider selection, gateway configuration, unrelated skills, or external state. Verification must use explicit temporary homes unless a live host change is separately authorized.
 
-- GitHub Actions 或其他 CI/CD workflow
-- Git tags
-- 测试文件或测试框架
-- 其他子项目或模块
+## Poster Runtime Boundary
 
-## 提交规范与禁止事项
+The portable Skill routes each request through `references/host-adapters.md`:
 
-为保护隐私和安全，**严禁**将以下内容提交到仓库：
+```text
+authorized compatible image capability -> image-led concept
+unauthorized billed/external capability -> one authorization request
+declined, absent, or incompatible capability -> deterministic local concept
+ambiguous network result -> stop pending fresh authorization
+```
 
-### 敏感信息
-- API 密钥、访问令牌、密码等凭据
-- 个人绝对路径（如本地用户目录）
-- NAS 存储路径或配置
-- 代理服务器地址和端口
-- 内网 IP 地址段
+The deterministic route is fully local and remains subject to the same stage and QA contracts. Each initialized project contains its own package lock, scripts, state schemas, templates, font preparation, font/license manifests, renderer, inspector, and visual-review recorder. Runtime dependencies are installed into that project with `npm ci`.
 
-### 临时文件
-- 会话文件
-- 日志文件
-- 缓存文件
-- 编辑器临时文件
+`poster.json` records the adapter name, whether it is external or billed, and authorized/used call counts. Used calls cannot exceed the authorized budget. Credentials and raw provider errors are not valid project state or evidence.
 
-### 不适当内容
-- 个人文件或未授权素材
-- 版权不明确的第三方资源
+## Truthful Delivery Boundary
 
-### 构建产物
-- 编译输出
-- 打包文件
-- `node_modules` 目录
-- 其他依赖目录
+- Concept is final-size and near-production, but remains labeled as awaiting confirmation.
+- Publish requires user confirmation and applicable mechanical QA evidence.
+- Release is a stricter state requiring final configuration, exact artifacts, source and font/license evidence, fresh render hashes, and recorded visual review.
+- Successful rendering or an image adapter artifact alone does not prove Publish or Release readiness.
 
-## 本轮开发分支策略
+## Packaging And Sensitive Content
 
-本轮 Chiyi/Hermes 海报工作流实施在 `feature/chiyi-hermes-poster-workflow` 分支上进行。当前 main 分支 checkout 保持不变。本轮完成后，由仓库所有者选择审查与合并方式。
+One shared resource predicate controls installation digests and copies. Setuptools exclusions and `MANIFEST.in` provide a second packaging boundary. Tests compare clean and deliberately polluted wheel resources and reject:
 
-## 审计日期
+- `node_modules`, virtual environments, caches, coverage, build output, and package metadata inside resources;
+- generated PNG/PDF and other media, logs, reports, sessions, and state databases;
+- `.env` variants, auth/config files, credentials, and secret directories;
+- host homes, backups, temporary projects, and user artifacts.
 
-2026-08-20
+The repository must not contain API keys, access tokens, passwords, private host configuration, personal absolute paths, unlicensed private assets, or generated production artifacts.
 
----
+## CI And Local Verification
 
-本文档随项目演进持续更新。
+CI runs:
+
+- the full Python suite on Python 3.11, 3.12, and 3.13;
+- the Skill runtime sync test and every `tests/runtime/*.test.mjs` test on Node 22;
+- clean/polluted wheel parity plus an independently inspected wheel built from a source tree containing `node_modules`;
+- isolated dry-run, apply, installed-tree parity, and restore smoke tests for `agents`, `codex`, `claude`, and `hermes`.
+
+Local release verification additionally runs the official Skill validator against the canonical Skill and each isolated installed copy. Fake adapter verification is local, deterministic, and contains no network code or paid request.
+
+## Preserved Restrictions
+
+- Do not write live `~/.agents`, `~/.codex`, `~/.claude`, or `~/.hermes` during tests.
+- Do not call a paid or external image provider without explicit authorization for that bounded call.
+- Do not commit credentials, generated media, host state, dependency directories, or build artifacts.
+- Do not push, publish, deploy, or claim host-runtime readiness from CI alone.
+- Preserve the MIT license and record separate licenses for external assets and bundled project fonts.
+
+The repository owner retains the decision to review, merge, install into a live host, publish artifacts, or authorize any external provider call.

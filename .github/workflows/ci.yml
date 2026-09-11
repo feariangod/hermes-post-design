@@ -34,6 +34,23 @@ jobs:
           cache-dependency-path: src/hermes_post_design/resources/skills/creative/poster-design/package-lock.json
       - run: npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
       - run: npm test --prefix src/hermes_post_design/resources/skills/creative/poster-design
+      - run: node --test tests/runtime/*.test.mjs
+
+  installer-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [agents, codex, claude, hermes]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[test]"
+      - name: Isolated ${{ matrix.target }} installer smoke test
+        run: python tests/installer_smoke.py --target "${{ matrix.target }}"
 
   wheel:
     runs-on: ubuntu-latest
@@ -48,8 +65,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: python -m pip install build
+      - run: python -m pip install -e ".[test]" build
       - run: npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
+      - name: Compare clean and polluted wheels
+        run: python -m pytest tests/test_package_contents.py -q -o "addopts="
       - run: python -m build --wheel
       - name: Verify packaged Hermes resources
         run: |

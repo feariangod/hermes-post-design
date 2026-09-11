@@ -1,215 +1,196 @@
-# Hermes Post Design
+# Portable Poster Design Skill
 
-Private, reproducible Chiyi GPT Image 2 and poster workflow for Hermes Agent.
+This repository provides a portable `poster-design` Agent Skill, a deterministic local poster runtime, and an optional Chiyi image adapter for Hermes Agent. The common Skill installs into Agents, Codex, Claude, or Hermes without changing host credentials or unrelated configuration.
 
-This repository packages four things that previously lived separately on one machine:
+## Support Boundary
 
-- a platform-neutral Chiyi client for text generation and multi-reference editing;
-- a thin provider for the current Hermes `image_generate` plugin interface;
-- the `chiyi-image-generation` and `poster-design` skills;
-- a small CLI that installs, updates, backs up, and restores those Hermes resources.
+- Python `3.11` to `3.13` for the installer and optional Chiyi client.
+- Node.js `22` for the poster project runtime and automated tests.
+- Four installer targets: `agents`, `codex`, `claude`, and `hermes`.
+- Deterministic local poster concepts are the fallback on every host.
+- External or billed image capabilities are optional host adapters and require authorization for each bounded call budget.
+- Hermes remains the only target that also installs the optional `chiyi-image-generation` Skill and Chiyi plugin.
 
-## Scope
+The repository does not configure a host, store credentials, publish a poster, or make an image request during installation or tests.
 
-Version `0.1.0` intentionally keeps a narrow support boundary:
+## Prepare The Checkout
 
-- Python `3.11` to `3.13`;
-- current Hermes Agent ImageGen plugin API;
-- Windows verified first; macOS/Linux use the same Python paths but are not yet machine-tested;
-- Chiyi provider/model/quality fixed to `chiyi` / `gpt-image-2` / `high`;
-- one image per paid request;
-- exact final dimensions through `size="WIDTHxHEIGHT"`;
-- up to 16 source images for editing;
-- one automatic retry only for an explicit HTTP `429`.
-
-Legacy Hermes compatibility shims, Docker validation, and a standalone visual poster editor are not part of v0.1.
-
-## Install
-
-Clone the private repository and install it into the Python environment used by Hermes:
+On macOS or Linux:
 
 ```bash
-git clone https://github.com/feariangod/hermes-post-design.git
-cd hermes-post-design
-python -m pip install .
+python3 --version
+python3 -m venv .venv
+./.venv/bin/python -m pip install -e ".[test]"
+npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
 ```
 
-Preview the files that would be deployed:
+On Windows PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+./.venv/Scripts/python.exe -m pip install -e ".[test]"
+npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
+```
+
+Keep `npm ci` project-local. Do not install these dependencies globally or copy the source checkout's `node_modules` into an installed Skill.
+
+## Install The Skill
+
+Choose isolated home variables for the examples below. `AGENTS_HOME` and `CLAUDE_HOME` are shell conveniences passed through `--home`; the installer also understands the native `CODEX_HOME` and `HERMES_HOME` defaults.
 
 ```bash
-hermes-post-design sync --hermes-home "$HERMES_HOME"
+AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 ```
 
-Apply the deployment:
+Always preview first. These dry runs report the managed paths and write nothing:
 
 ```bash
-hermes-post-design sync --hermes-home "$HERMES_HOME" --apply
+hermes-post-design install-skill --target agents --home "$AGENTS_HOME"
+hermes-post-design install-skill --target codex --home "$CODEX_HOME"
+hermes-post-design install-skill --target claude --home "$CLAUDE_HOME"
+hermes-post-design install-skill --target hermes --home "$HERMES_HOME"
 ```
 
-Install the optional Poster HTML/PDF runtime dependencies after the first sync:
+After reviewing the dry-run output, apply only the selected target:
 
 ```bash
-npm ci --prefix "$HERMES_HOME/skills/creative/poster-design"
+hermes-post-design install-skill --target agents --home "$AGENTS_HOME" --apply
+hermes-post-design install-skill --target codex --home "$CODEX_HOME" --apply
+hermes-post-design install-skill --target claude --home "$CLAUDE_HOME" --apply
+hermes-post-design install-skill --target hermes --home "$HERMES_HOME" --apply
 ```
 
-The renderer uses an installed Chrome/Edge when available. If neither is available, install Playwright Chromium explicitly:
-
-```bash
-npx --prefix "$HERMES_HOME/skills/creative/poster-design" playwright install chromium
-```
-
-The sync command manages only these paths:
+Without `--home`, the target roots are:
 
 ```text
-$HERMES_HOME/plugins/image_gen/chiyi/
-$HERMES_HOME/skills/media/chiyi-image-generation/
-$HERMES_HOME/skills/creative/poster-design/
+agents -> $HOME/.agents
+codex  -> $CODEX_HOME or $HOME/.codex
+claude -> $HOME/.claude
+hermes -> $HERMES_HOME or $HOME/.hermes
 ```
 
-It does not edit `.env`, `config.yaml`, provider credentials, or unrelated plugins and skills. Existing managed paths are copied to:
+The common Skill is installed at `skills/poster-design` for Agents, Codex, and Claude, and at `skills/creative/poster-design` for Hermes. Hermes additionally receives:
 
 ```text
-$HERMES_HOME/backups/hermes-post-design/<UTC timestamp>/
+skills/media/chiyi-image-generation
+plugins/image_gen/chiyi
 ```
 
-## Configure Hermes
+Apply creates a timestamped backup under `<host-home>/backups/hermes-post-design/`. The Python API `restore_install(target, home, backup)` restores exactly the paths recorded by that target-aware backup. The legacy Hermes command remains available:
 
-Store `CHIYI_IMAGE_API_KEY` using the normal Hermes secret/configuration workflow. Do not put it in this repository.
+```bash
+hermes-post-design restore --hermes-home "$HERMES_HOME" --backup "$HERMES_HOME/backups/hermes-post-design/<timestamp>"
+```
 
-Enable the deployed user plugin and select it as the image provider using current Hermes commands:
+## Select A Host Adapter
+
+Before creating a concept, read the installed Skill's `references/host-adapters.md` and inspect the capabilities actually available in the current host. Use this order:
+
+```text
+authorized compatible image tool -> image-led concept
+available but billed/external and not authorized -> request authorization once
+declined, missing, or incompatible image tool -> deterministic local concept
+ambiguous network failure -> stop; do not retry without fresh authorization
+```
+
+The deterministic local route is a complete fallback. It uses project-local HTML, CSS, fonts, shapes, gradients, and authorized local assets, then runs the same Concept, Publish, and Release gates as an image-led route.
+
+Before any billed or external image call, name the selected capability, state that the call may be billed or leave the local environment, describe the immediate artifact, and obtain explicit authorization. Authorization for a poster, a visual direction, or an earlier call does not authorize another billed or external call.
+
+Credentials must stay outside the repository. Keep provider keys in the host's secret store or process environment, never in project JSON, logs, errors, command arguments, committed `.env` files, or generated evidence.
+
+## Create A Poster Project
+
+Run the installed Skill through the current host, or initialize the same local runtime directly:
+
+```bash
+node "$CODEX_HOME/skills/poster-design/scripts/init-poster.mjs" \
+  --output ./poster-project \
+  --title "Event poster" \
+  --type digital \
+  --width 1080 \
+  --height 1920
+cd poster-project
+npm ci
+npm run prepare
+```
+
+`npm ci` belongs inside each initialized project. It materializes pinned fonts, local license evidence, Playwright, and inspection dependencies without relying on the source checkout.
+
+The project starts in `intake` with provider `deterministic-local`, `external=false`, `billed=false`, and zero authorized or used calls. Update `brief.json`, `poster.html`, `styles.css`, and `poster.json` as the work advances. Then render and inspect:
+
+```bash
+npm run render
+npm run inspect
+```
+
+Concept output must remain labeled as awaiting confirmation. A rendered PNG is not by itself a Publish or Release claim. Publish requires user confirmation plus applicable QA evidence; Release requires the stricter final-state, artifact, source, font, license, and visual-review evidence enforced by `npm run inspect:final`.
+
+The renderer resolves an explicit browser first and otherwise searches normal Chrome, Edge, and Playwright locations on macOS, Linux, and Windows. Install Playwright Chromium only when no compatible local browser is available:
+
+```bash
+npx playwright install chromium
+```
+
+## Optional Hermes Chiyi Adapter
+
+The Hermes target preserves the existing Chiyi workflow. Store `CHIYI_IMAGE_API_KEY` through the normal Hermes secret/configuration flow, then enable and select the provider with current Hermes controls:
 
 ```bash
 hermes plugins enable chiyi
 hermes tools
-```
-
-In `hermes tools`, choose Image Generation, select `Chiyi GPT Image 2`, and keep the fixed model and quality. Restart the gateway after changing plugin or provider configuration.
-
-Check installation state without printing the key:
-
-```bash
 hermes-post-design doctor --hermes-home "$HERMES_HOME" --json
 ```
 
-## Use In Hermes
-
-Text generation:
-
-```text
-image_generate(
-  prompt="A restrained editorial poster for an AI workshop",
-  size="1080x1920"
-)
-```
-
-Image editing:
-
-```text
-image_generate(
-  prompt="Preserve the product and redesign the scene as a premium studio campaign",
-  image_url="C:/path/to/primary.png",
-  reference_image_urls=["C:/path/to/reference.png"],
-  size="1080x1920"
-)
-```
-
-Do not pass `aspect_ratio`, `quality`, `model`, or `n`. The provider fixes them deliberately.
-
-## Standalone CLI
-
-The CLI reads `CHIYI_IMAGE_API_KEY` from the process environment. It does not accept a key on the command line.
+The provider fixes model `gpt-image-2`, quality `high`, one output image, and exact requested dimensions. The standalone CLI reads the key only from the process environment:
 
 ```bash
-hermes-post-design generate "A typographic film poster" \
-  --size 1080x1920 \
-  --output-dir ./artifacts
+hermes-post-design generate "A typographic event poster" --size 1080x1920 --output-dir ./artifacts
 ```
 
-```bash
-hermes-post-design edit "Keep the subject; use the reference lighting" \
-  --image ./primary.png \
-  --reference ./lighting-reference.png \
-  --size 1080x1920 \
-  --output-dir ./artifacts
-```
-
-Add `--json` for machine-readable output.
-
-## Update And Restore
-
-Update the checkout, reinstall the package, preview the sync, then apply it:
-
-```bash
-git pull --ff-only
-python -m pip install --upgrade .
-hermes-post-design sync --hermes-home "$HERMES_HOME"
-hermes-post-design sync --hermes-home "$HERMES_HOME" --apply
-npm ci --prefix "$HERMES_HOME/skills/creative/poster-design"
-```
-
-Restore a backup created by sync:
-
-```bash
-hermes-post-design restore \
-  --hermes-home "$HERMES_HOME" \
-  --backup "$HERMES_HOME/backups/hermes-post-design/<timestamp>"
-```
-
-Restore only affects the three managed paths listed above.
+It validates sources and outputs, blocks private or local remote targets, bounds input size and decoded pixels, disables redirects on paid POST requests, retries only one explicit HTTP `429`, and redacts credentials and sensitive payloads from errors.
 
 ## Architecture
 
 ```text
-Hermes image_generate
-        |
-        v
-thin ImageGen provider  ---- standalone CLI
-        |                       |
-        +----------+------------+
-                   v
-              Chiyi Core
-  request models / sizing / source loading
-  HTTP + bounded retry / SSE / image validation
-  exact-size normalization / atomic artifact save
+Agents / Codex / Claude / Hermes
+              |
+              v
+     portable poster-design Skill
+              |
+      host-adapters.md routing
+        /                 \
+       v                   v
+deterministic local    authorized image adapter
+       \                   /
+        +--------+---------+
+                 v
+       project-local runtime
+ init -> prepare -> render -> inspect -> evidence
 ```
 
-The provider contains no duplicated HTTP, image, or SSE implementation. This keeps Hermes adaptation small while the Core remains independently testable.
+The installed Skill carries its templates, runtime scripts, pinned project dependencies, stage contracts, and QA rules. Generated artifacts, dependencies, credentials, host state, and backups are filtered out of the canonical install and Python wheel.
 
-## Safety And Billing
+## Development And Verification
 
-The Core provides practical boundaries for this workflow:
-
-- validates local files, strict Base64 data URLs, and public HTTP(S) sources;
-- blocks private/loopback/link-local remote targets and revalidates redirects;
-- limits compressed image inputs and outputs to 25 MiB and decoded images to 40 MP;
-- rejects animated images;
-- validates and atomically saves final image artifacts;
-- disables redirects on paid POST requests;
-- retries only an explicit HTTP `429`, at most once;
-- does not retry ambiguous network failures, `5xx`, malformed success responses, SSE failures, downloads, or save failures;
-- does not include keys, Authorization headers, image bytes, Base64 payloads, or URL queries in returned errors.
-
-## Development
+Run the repository checks without contacting an image service:
 
 ```bash
-python -m venv .venv
-./.venv/Scripts/python.exe -m pip install -e ".[test]"
-./.venv/Scripts/python.exe -m pytest -q -o "addopts="
-./.venv/Scripts/python.exe -m pip wheel . --no-deps -w dist
+./.venv/bin/python -m pytest -q -o "addopts="
+npm test --prefix src/hermes_post_design/resources/skills/creative/poster-design
+node --test tests/runtime/*.test.mjs
+git diff --check
 ```
 
-The test suite is offline: it uses fakes and mocks and does not submit paid Chiyi requests.
+CI runs Python `3.11`, `3.12`, and `3.13`; Node `22`; clean and deliberately polluted wheel comparisons; and isolated install/restore smoke tests for all four host targets. Test adapters and image results are deterministic local fixtures. They do not submit paid or external requests.
 
 ## Repository Hygiene
 
-The repository intentionally excludes:
-
-- API keys and Hermes configuration;
-- user images, logos, portraits, QR codes, and other private assets;
-- generated PNG/PDF artifacts;
-- Hermes logs, sessions, caches, backups, and databases;
-- `.venv`, `node_modules`, build output, and test caches.
+The resource filter and package configuration exclude dependency trees, caches, build output, generated media, reports, host homes, sessions, state databases, backups, configuration, and credentials. External assets, fonts, generated media, model outputs, and user-supplied material retain their own terms and must be recorded in the project evidence when used.
 
 ## License
 
-MIT for repository code and templates. External assets, fonts, generated media, model outputs, and user-supplied material retain their own terms and are not included here.
+MIT for repository code and templates. Bundled project fonts retain the licenses recorded in their project-local manifests.

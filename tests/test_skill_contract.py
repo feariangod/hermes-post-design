@@ -57,6 +57,13 @@ def skill_root() -> Path:
     )
 
 
+@pytest.fixture
+def readme() -> str:
+    return (Path(__file__).resolve().parents[1] / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_skill_frontmatter_uses_common_schema(skill_root):
     metadata = read_frontmatter(skill_root / "SKILL.md")
     assert set(metadata) <= {"name", "description", "license", "metadata", "allowed-tools"}
@@ -112,3 +119,36 @@ ambiguous network failure -> stop; do not retry without fresh authorization""" i
         "exists, continue with the deterministic local route."
     ) in adapter
     assert "Do not retry, fail over to another external capability" in adapter
+
+
+def test_readme_documents_every_portable_install_target(readme):
+    homes = {
+        "agents": "AGENTS_HOME",
+        "codex": "CODEX_HOME",
+        "claude": "CLAUDE_HOME",
+        "hermes": "HERMES_HOME",
+    }
+    for target, home in homes.items():
+        assert f"hermes-post-design install-skill --target {target}" in readme
+        dry_run = (
+            f"hermes-post-design install-skill --target {target} "
+            f'--home "${home}"'
+        )
+        apply = f"{dry_run} --apply"
+        assert dry_run in readme
+        assert apply in readme
+        assert readme.index(dry_run) < readme.index(apply)
+
+
+def test_readme_documents_portable_local_runtime(readme):
+    assert "python3 -m venv .venv" in readme
+    assert "./.venv/bin/python -m pip install -e \".[test]\"" in readme
+    assert "npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design" in readme
+    assert "host-adapters.md" in readme
+    assert "deterministic local" in readme.lower()
+
+
+def test_readme_documents_external_call_and_secret_boundaries(readme):
+    assert "Before any billed or external image call" in readme
+    assert "explicit authorization" in readme
+    assert "Credentials must stay outside the repository" in readme
