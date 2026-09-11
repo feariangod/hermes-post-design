@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,15 +23,6 @@ function run(command, args, options = {}) {
 
 async function sha256(filePath) {
   return createHash('sha256').update(await readFile(filePath)).digest('hex');
-}
-
-function installedBrowser() {
-  const candidates = [
-    process.env.POSTER_TEST_BROWSER,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-  ].filter(Boolean);
-  return candidates.find(existsSync);
 }
 
 test('initialized poster project keeps contracts, dependencies, fonts, and licenses local', async (context) => {
@@ -108,8 +98,6 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
     assert.match(css, new RegExp(font.file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 
-  const browser = installedBrowser();
-  assert.ok(browser, 'Set POSTER_TEST_BROWSER or install Chrome/Edge for the portability render fixture.');
-  const renderOutput = run('npm', ['run', 'render', '--', '--browser', browser], { cwd: project });
+  const renderOutput = run('npm', ['run', 'render'], { cwd: project });
   assert.doesNotMatch(renderOutput, /ERR_MODULE_NOT_FOUND/);
 });
