@@ -17,7 +17,7 @@ A Concept passes when:
 - an actual phone-scale render, normally 360px wide, proves headline, subheading, facts, and call-to-action readability; do not infer mobile readability from the full-size canvas;
 - supplied real assets were not silently replaced without disclosure;
 - there is no fake QR; a missing URL uses an explicit empty slot;
-- text failures have completed the bounded repair sequence: one targeted Image 2 correction, then deterministic coverage if needed, followed by complete reinspection;
+- text failures have completed the bounded repair sequence: one targeted compatible-tool correction, then deterministic coverage if needed, followed by complete reinspection;
 - the output is labeled `concept — awaiting confirmation`.
 
 Concept text may be generated and non-editable, but wrong, clipped, fabricated, or unapproved readable text blocks delivery. Text repair is a defect fix and does not consume the direction revision.
@@ -38,7 +38,7 @@ A Publish PNG passes when:
 - real people match authorized source assets; face/age/identity drift is covered with authentic pixels;
 - product/package geometry, label, barcode, and regulated copy use the authorized source when identity matters;
 - every real Logo or brand mark uses the original authorized asset;
-- Image 2 content/style/layout references were used only for their declared roles;
+- image-tool content/style/layout references were used only for their declared roles;
 - no unauthorized extra logo, watermark, identity, or product claim appears.
 
 ### QR
@@ -57,7 +57,7 @@ A Publish PNG passes when:
 - the image remains faithful to the `visual_locked` concept rather than introducing a new direction;
 - `publish-qa.json` reports `PASS` for size, facts, identity, logo, QR when applicable, mobile, and artifacts.
 
-Allow one targeted Publish defect-fix cycle. A failed Image 2 correction escalates only the failing element to a deterministic layer; do not restart concept exploration.
+Allow one targeted Publish defect-fix cycle. A failed compatible-tool correction escalates only the failing element to a deterministic layer; do not restart concept exploration.
 
 ## Release gates
 

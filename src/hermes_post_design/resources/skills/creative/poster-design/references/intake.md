@@ -1,8 +1,8 @@
-# Adaptive Poster Intake V2
+# Adaptive Poster Intake
 
 ## Default responsibility
 
-The default request is a directly publishable PNG, but the user must first approve one final-size near-production concept. Do not spend full production effort before this confirmation.
+The default request is a directly publishable PNG, but the user must first approve one final-size near-production concept. Determine the authorized image-led or deterministic-local route through `host-adapters.md` before beginning Concept work. Do not spend full production effort before this confirmation.
 
 ## Minimal intake
 
@@ -37,13 +37,13 @@ Selecting a text-only option does not consume the direction revision. The revisi
 |---|---|
 | user asks for a direction or says “先看看” | Concept only; wait for confirmation |
 | ordinary social/event/course poster | Concept → Publish |
-| real person, product, venue, institution, or logo | Image 2-led concept with authentic-asset review; Publish protects identity/brand assets |
+| real person, product, venue, institution, or logo | selected-route concept with authentic-asset review; Publish protects identity/brand assets |
 | prices, dates, addresses, rules, contacts, claims, or QR | Fact contract and Publish verification |
 | print, A0/A1, PDF, paid campaign evidence, localization, full editability, legal/scientific/medical/financial responsibility | Upgrade to Release |
 
 ## Concept confirmation gate
 
-Concept always uses the requested final size and attempts to look near-production. It may use complete Image 2 text and may contain an explicitly labeled empty QR slot. It is not publish-ready.
+Concept always uses the requested final size and attempts to look near-production. An authorized image-led route may use generated text; the deterministic-local route may compose text locally. It may contain an explicitly labeled empty QR slot. It is not publish-ready.
 
 - Generate one concept.
 - User accepts → `visual_locked`.

@@ -1,4 +1,4 @@
-# Typography Rules V2
+# Typography Rules
 
 ## Shared exact-text contract
 
@@ -8,11 +8,11 @@ Exact characters do not prove a true claim. Names, dates, times, places, prices,
 
 ## Concept
 
-Image 2 may render all Concept text, and that text may be non-editable, but it must be accurate before delivery. The purpose remains to judge hierarchy, density, type mood, and composition without asking the user to approve a visibly defective copy layer.
+An authorized compatible image tool may render all Concept text, and that text may be non-editable, but it must be accurate before delivery. The purpose remains to judge hierarchy, density, type mood, and composition without asking the user to approve a visibly defective copy layer.
 
 Concept text repair follows one bounded sequence:
 
-1. Allow one targeted Image 2 text correction while preserving the selected direction, composition, subject, and information zones.
+1. Allow one targeted compatible-tool text correction while preserving the selected direction, composition, subject, and information zones.
 2. If any intended or unintended readable text still fails, apply deterministic typography or a deterministic cover only to the failing region.
 3. Reinspect the complete Concept at target and phone scale against the approved-copy and fact contracts.
 4. Do not deliver a misspelled, clipped, fabricated, or unapproved readable string for confirmation.
@@ -21,9 +21,9 @@ The correction and deterministic cover are defect repairs. They do not consume t
 
 ## Publish
 
-Generated text may remain in the directly publishable PNG only when every character and claim is verified. A small non-identity text defect gets at most one targeted Image 2 edit; failure escalates that text to a deterministic overlay. Publish cannot use a lower text standard than Concept.
+Generated text may remain in the directly publishable PNG only when every character and claim is verified. A small non-identity text defect gets at most one targeted compatible-tool edit; failure escalates that text to a deterministic overlay. Publish cannot use a lower text standard than Concept.
 
-Use deterministic text by default for names, dates, times, places, prices, rules, contacts, labels, disclaimers, claims, and any item whose future editing matters. The overlay may be HTML/CSS, SVG, or a local raster composition layer; it does not require rebuilding the full Image 2 poster.
+Use deterministic text by default for names, dates, times, places, prices, rules, contacts, labels, disclaimers, claims, and any item whose future editing matters. The overlay may be HTML/CSS, SVG, or a local raster composition layer; it does not require rebuilding the full image-led poster.
 
 Phone-scale review must show that the call to action and critical facts remain readable. Fix unreadable text through layout/coverage, not by claiming the full-size source is sufficient.
 
