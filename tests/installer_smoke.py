@@ -14,12 +14,16 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from hermes_post_design.install import (  # noqa: E402
-    _should_include_resource,
-    restore_install,
+from hermes_post_design.install import restore_install  # noqa: E402
+from tests.skill_inventory import (  # noqa: E402
+    assert_file_hash_parity,
+    directory_file_hashes,
+    git_tracked_file_hashes,
 )
 
 
@@ -51,19 +55,6 @@ def _snapshot(root: Path) -> dict[str, str]:
         else:
             entries[relative] = "other"
     return entries
-
-
-def _file_hashes(root: Path, *, filtered: bool) -> dict[str, str]:
-    hashes = {}
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root)
-        if filtered and not _should_include_resource(relative.parts):
-            continue
-        if path.is_symlink():
-            raise AssertionError(f"unexpected symlink: {path}")
-        if path.is_file():
-            hashes[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return hashes
 
 
 def _run_cli(target: str, home: Path, *, apply: bool) -> dict:
@@ -148,10 +139,13 @@ def run_target(target: str, validator: Path | None) -> dict:
 
         installed_skill = home / SKILL_PATHS[target]
         validator_output = _validate_skill(installed_skill, validator)
-        canonical_hashes = _file_hashes(CANONICAL_SKILL, filtered=True)
-        installed_hashes = _file_hashes(installed_skill, filtered=False)
-        if installed_hashes != canonical_hashes:
-            raise AssertionError(f"filtered hash parity failed for {target}")
+        canonical_hashes = git_tracked_file_hashes(
+            REPOSITORY_ROOT, CANONICAL_SKILL
+        )
+        installed_hashes = directory_file_hashes(installed_skill)
+        assert_file_hash_parity(
+            canonical_hashes, installed_hashes, f"{target} installed Skill"
+        )
 
         restored = restore_install(target, home, backup)
         if SKILL_PATHS[target].as_posix() not in restored["restored"]:
@@ -167,7 +161,8 @@ def run_target(target: str, validator: Path | None) -> dict:
             "dry_run_entries": len(dry_run["entries"]),
             "apply_entries": len(applied["entries"]),
             "installed_files": len(installed_hashes),
-            "filtered_hash_manifest_sha256": digest,
+            "tracked_hash_manifest_sha256": digest,
+            "tracked_files": len(canonical_hashes),
             "validator": validator_output,
             "restore_preserved_seed": True,
         }

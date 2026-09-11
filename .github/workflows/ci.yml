@@ -70,19 +70,27 @@ jobs:
       - name: Compare clean and polluted wheels
         run: python -m pytest tests/test_package_contents.py -q -o "addopts="
       - run: python -m build --wheel
-      - name: Verify packaged Hermes resources
+      - name: Verify Git-tracked Skill inventory and forbidden wheel entries
         run: |
           python - <<'PY'
+          import hashlib
           from pathlib import Path
-          import sys
           from zipfile import ZipFile
 
-          sys.path.insert(0, str(Path("src").resolve()))
-          from hermes_post_design.install import _should_include_resource
+          from tests.skill_inventory import assert_file_hash_parity, git_tracked_file_hashes
 
           wheel = next(Path("dist").glob("*.whl"))
           with ZipFile(wheel) as archive:
               names = archive.namelist()
+              skill_prefix = "hermes_post_design/resources/skills/creative/poster-design/"
+              wheel_skill_hashes = {
+                  name.removeprefix(skill_prefix): hashlib.sha256(archive.read(name)).hexdigest()
+                  for name in names
+                  if name.startswith(skill_prefix) and not name.endswith("/")
+              }
+          canonical = Path("src/hermes_post_design/resources/skills/creative/poster-design")
+          tracked_hashes = git_tracked_file_hashes(Path.cwd(), canonical)
+          assert_file_hash_parity(tracked_hashes, wheel_skill_hashes, "wheel Skill")
           required = [
               "resources/plugins/image_gen/chiyi/provider.py",
               "resources/skills/media/chiyi-image-generation/SKILL.md",
@@ -105,5 +113,4 @@ jobs:
                   assert not any(part.endswith((".dist-info", ".egg-info")) for part in relative_parts), name
                   assert Path(name).name.lower() not in forbidden_names, name
                   assert not name.lower().endswith((".db", ".sqlite", ".sqlite3")), name
-                  assert _should_include_resource(relative_parts), name
           PY

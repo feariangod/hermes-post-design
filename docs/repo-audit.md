@@ -13,7 +13,7 @@ The current repository is a portable Agent Skill and deterministic poster runtim
 - `src/hermes_post_design/chiyi_core`: platform-neutral optional Chiyi client with bounded requests, source validation, artifact normalization, and redacted errors.
 - `src/hermes_post_design/resources/plugins/image_gen/chiyi`: thin Hermes provider over the shared client.
 - `src/hermes_post_design/resources/skills/media/chiyi-image-generation`: Hermes-only image-generation Skill.
-- `tests`: Python contract, installer, packaging, client, provider, and zero-network fixture coverage plus Node runtime integration tests.
+- `tests`: Python contract, installer, packaging, client, provider, forward-test evaluator, and zero-network fixture coverage plus Node runtime integration tests.
 - `.github/workflows/ci.yml`: Python 3.11-3.13, Node 22, wheel, and four-target installer verification.
 
 ## Installation Boundary
@@ -72,10 +72,11 @@ CI runs:
 
 - the full Python suite on Python 3.11, 3.12, and 3.13;
 - the Skill runtime sync test and every `tests/runtime/*.test.mjs` test on Node 22;
-- clean/polluted wheel parity plus an independently inspected wheel built from a source tree containing `node_modules`;
-- isolated dry-run, apply, installed-tree parity, and restore smoke tests for `agents`, `codex`, `claude`, and `hermes`.
+- clean/polluted wheel parity plus Git-tracked canonical Skill inventory/hash parity and explicit forbidden-entry checks on a wheel built from a source tree containing `node_modules`;
+- isolated dry-run, apply, Git-tracked installed-tree parity, and restore smoke tests for `agents`, `codex`, `claude`, and `hermes`;
+- positive and controlled-negative tests for the executable deterministic forward-test evaluator.
 
-Local release verification additionally runs the official Skill validator against the canonical Skill and each isolated installed copy. Fake adapter verification is local, deterministic, and contains no network code or paid request.
+Local release verification additionally runs the official Skill validator against the canonical Skill and each isolated installed copy. The forward evaluator checks exact PNG IHDR dimensions, artifact/source/evidence hashes, visible awaiting-confirmation source evidence, Concept/provider state, and readiness-claim boundaries. Fake adapter verification is local, deterministic, and contains no network code or paid request.
 
 ## Preserved Restrictions
 

@@ -18,8 +18,12 @@ if str(SOURCE_ROOT) not in sys.path:
 from hermes_post_design.install import apply_install  # noqa: E402
 from tests.installer_smoke import (  # noqa: E402
     CANONICAL_SKILL,
-    _file_hashes,
     _validate_skill,
+)
+from tests.skill_inventory import (  # noqa: E402
+    assert_file_hash_parity,
+    directory_file_hashes,
+    git_tracked_file_hashes,
 )
 
 
@@ -30,34 +34,37 @@ REQUEST = (
 )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--validator", type=Path)
-    args = parser.parse_args()
-
-    output = args.output.expanduser().absolute()
-    if output.exists() and any(output.iterdir()):
-        raise SystemExit(f"refusing non-empty output directory: {output}")
-    output.mkdir(parents=True, exist_ok=True)
-    home = output / "codex-home"
-    result = apply_install("codex", home)
-    skill = home / "skills/poster-design"
-    validator_output = _validate_skill(skill, args.validator)
-    if _file_hashes(skill, filtered=False) != _file_hashes(
-        CANONICAL_SKILL, filtered=True
-    ):
-        raise SystemExit("installed forward-test Skill failed filtered hash parity")
-
-    workdir = output / "work"
-    workdir.mkdir()
-    contract = {
+def _evidence_contract(skill: Path, workdir: Path) -> dict:
+    return {
         "request": REQUEST,
         "skill_path": str(skill),
         "workdir": str(workdir),
+        "evaluator": {
+            "command": [
+                sys.executable,
+                str(REPOSITORY_ROOT / "tests/evaluate_forward_test.py"),
+                "--workdir",
+                str(workdir),
+            ],
+            "success_exit_code": 0,
+            "failure_exit_code": 1,
+        },
         "required": {
-            "artifact": "one non-empty PNG decoded as exactly 1080x1920",
-            "visible_label": "awaiting confirmation",
+            "artifact": {
+                "format": "PNG",
+                "non_empty": True,
+                "ihdr_width": 1080,
+                "ihdr_height": 1920,
+                "path_source": "poster.json delivery.artifact",
+            },
+            "hashes": (
+                "verification.json must record matching byte_size and sha256 for "
+                "the artifact, deterministic source, and any phone-scale evidence"
+            ),
+            "visible_label": (
+                "poster.json label and a visible in-canvas SVG text element must "
+                "contain awaiting confirmation"
+            ),
             "poster_state": {
                 "mode": "concept",
                 "state": "concept",
@@ -69,7 +76,10 @@ def main() -> int:
                     "usedCalls": 0,
                 },
             },
-            "report": "paths, decoded dimensions, non-empty evidence, state values, and actual QA status",
+            "report": (
+                "paths, decoded dimensions, non-empty evidence, source/evidence "
+                "hashes, state values, and actual QA status"
+            ),
         },
         "forbidden": [
             "network or paid image request",
@@ -77,6 +87,33 @@ def main() -> int:
             "Publish, Release, publish-ready, or release-ready claim",
         ],
     }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--validator", type=Path)
+    parser.add_argument("--refresh-contract", action="store_true")
+    args = parser.parse_args()
+
+    output = args.output.expanduser().absolute()
+    populated = output.exists() and any(output.iterdir())
+    if populated and not args.refresh_contract:
+        raise SystemExit(f"refusing non-empty output directory: {output}")
+    output.mkdir(parents=True, exist_ok=True)
+    home = output / "codex-home"
+    result = {"backup": None} if populated else apply_install("codex", home)
+    skill = home / "skills/poster-design"
+    validator_output = _validate_skill(skill, args.validator)
+    expected_hashes = git_tracked_file_hashes(REPOSITORY_ROOT, CANONICAL_SKILL)
+    installed_hashes = directory_file_hashes(skill)
+    assert_file_hash_parity(
+        expected_hashes, installed_hashes, "forward-test installed Skill"
+    )
+
+    workdir = output / "work"
+    workdir.mkdir(exist_ok=True)
+    contract = _evidence_contract(skill, workdir)
     contract_path = output / "evidence-contract.json"
     contract_path.write_text(
         json.dumps(contract, ensure_ascii=True, indent=2) + "\n", encoding="utf-8"
@@ -92,6 +129,8 @@ def main() -> int:
                 "evidence_contract": str(contract_path),
                 "backup": result["backup"],
                 "validator": validator_output,
+                "tracked_files": len(expected_hashes),
+                "contract_refreshed": populated,
             },
             sort_keys=True,
         )

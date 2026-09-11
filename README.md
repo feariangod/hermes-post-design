@@ -182,10 +182,13 @@ Run the repository checks without contacting an image service:
 ./.venv/bin/python -m pytest -q -o "addopts="
 npm test --prefix src/hermes_post_design/resources/skills/creative/poster-design
 node --test tests/runtime/*.test.mjs
+./.venv/bin/python tests/evaluate_forward_test.py --workdir "$FORWARD_TEST_WORKDIR"
 git diff --check
 ```
 
-CI runs Python `3.11`, `3.12`, and `3.13`; Node `22`; clean and deliberately polluted wheel comparisons; and isolated install/restore smoke tests for all four host targets. Test adapters and image results are deterministic local fixtures. They do not submit paid or external requests.
+The forward-test evaluator checks the PNG signature and IHDR dimensions, recorded artifact/source/evidence hashes, visible awaiting-confirmation source label, Concept state, deterministic-local provider counters, and absence of positive Publish or Release readiness claims.
+
+CI runs Python `3.11`, `3.12`, and `3.13`; Node `22`; clean and deliberately polluted wheel comparisons; Git-tracked canonical Skill file/hash parity; and isolated install/restore smoke tests for all four host targets. Test adapters and image results are deterministic local fixtures. They do not submit paid or external requests.
 
 ## Repository Hygiene
 
