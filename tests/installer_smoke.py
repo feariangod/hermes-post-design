@@ -90,6 +90,7 @@ def _validate_skill(skill: Path, validator: Path | None) -> str:
     required = (
         "SKILL.md",
         "references/host-adapters.md",
+        "references/local-runtime.md",
         "scripts/init-poster.mjs",
         "templates/poster-starter/poster.json",
     )

@@ -485,6 +485,22 @@ async function createReleaseProject(context, scenario) {
     await writeJson(posterPath, poster);
     await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', '<p data-copy>𠮷</p></section>'));
   }
+  if (['copy-image-alt-only', 'copy-image-hidden-alternative', 'copy-visible-svg-title'].includes(scenario)) {
+    const posterPath = path.join(project, 'poster.json');
+    const poster = await readJson(posterPath);
+    poster.approvedCopy.push('Image title');
+    await writeJson(posterPath, poster);
+    let title;
+    if (scenario === 'copy-visible-svg-title') {
+      title = '<svg width="400" height="90"><text data-copy x="8" y="64" style="font-size:48px;font-weight:700;fill:#224c3c">Image title</text></svg>';
+    } else {
+      await writeTinyAsset(project, 'assets/images/title.png');
+      await recordAsset(project, 'assets/images/title.png');
+      title = '<img data-copy src="assets/images/title.png" alt="Image title" width="2" height="2">';
+      if (scenario === 'copy-image-hidden-alternative') title += '<span data-copy hidden>Image title</span>';
+    }
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', `${title}</section>`));
+  }
 
   await writeOutputs(project);
   await writeCurrentEvidence(project);
@@ -527,6 +543,13 @@ test('Release accepts the mechanically clean baseline fixture', async (context) 
   assert.deepEqual(report.blockers, []);
 });
 
+test('Release accepts visible styled SVG title text', async (context) => {
+  const { inspection, report } = await inspectRelease(context, 'copy-visible-svg-title');
+  assert.equal(inspection.status, 0, JSON.stringify(report.blockers, null, 2));
+  assert.equal(report.release.finalEligible, true);
+  assert.deepEqual(report.blockers, []);
+});
+
 test('source hashes include a root-level render asset', async (context) => {
   const project = await createReleaseProject(context, 'asset-root-unlicensed');
   const renderResult = await readJson(path.join(project, 'render-result.json'));
@@ -550,6 +573,8 @@ for (const [scenario, expectedCodes] of [
   ['copy-mismatch', ['COPY_MISMATCH']],
   ['copy-unbound', ['COPY_MISMATCH', 'COPY_UNBOUND']],
   ['copy-mixed-unbound', ['COPY_UNBOUND']],
+  ['copy-image-alt-only', ['COPY_MISMATCH']],
+  ['copy-image-hidden-alternative', ['COPY_MISMATCH', 'COPY_NOT_VISIBLE']],
   ['font-mixed-glyph', ['COPY_UNBOUND', 'FONT_LOAD_FAILED', 'FONT_POSTER_GLYPH_MISSING']],
   ['asset-unlicensed', ['ASSET_LICENSE_MISSING']],
   ['asset-hash', ['ASSET_HASH_MISMATCH']],

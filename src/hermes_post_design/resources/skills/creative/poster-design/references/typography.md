@@ -92,7 +92,11 @@ Use display fonts for short headings, never dense body copy. Body copy prioritiz
 
 Declare local files with `@font-face`, explicit weights, and `font-display: block`. Wait for `document.fonts.ready` before inspection or rendering. The strict inspector treats undeclared generic/system fallback as blocking.
 
-CSS/SVG may add foil, stroke, shadow, emboss, seals, brush masks, and texture. Keep Release-critical semantic text in the DOM/SVG. If an exceptional hand-lettered title remains an image/path, include editable alternative text and never use it for a critical fact.
+CSS/SVG may add foil, stroke, shadow, emboss, seals, brush masks, and texture to genuinely visible text. Strict Release requires every approved readable string, including an expressive title, to be visible DOM text or SVG `<text>` with the appropriate copy/fact binding. Inspect the actual rendered treatment for readability as well as font and glyph coverage.
+
+Image lettering and path-only lettering can remain in Concept, or in Publish when every character and claim is verified and editability is not required. They do not meet the current strict Release text contract. An image's `alt`, an accessibility label, hidden text, or text covered by the lettering is not a visible editable substitute.
+
+If a locked image-only title cannot be reproduced as visible text without changing its approved shape, name the Release blocker and ask for confirmation of that specific change. Preserve the approved original; do not silently replace it, remove the title from `approvedCopy`, or claim a lower-stage artifact satisfies the requested Release. Report only the stage whose evidence actually passes.
 
 ## Glyph coverage
 

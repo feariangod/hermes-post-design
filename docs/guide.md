@@ -1,0 +1,259 @@
+# Installation And Runtime Guide
+
+[中文首页](../README.md) · [English overview](../README.en.md)
+
+This is the detailed operator and contributor guide. Run checkout commands from the repository root unless a step explicitly enters an initialized poster project.
+
+This repository provides a portable `poster-design` Agent Skill, a deterministic local poster runtime, and an optional Chiyi image adapter for Hermes Agent. The common Skill installs into Agents, Codex, Claude, or Hermes without changing host credentials or unrelated configuration.
+
+## Support Boundary
+
+- Python `3.11` to `3.13` for the installer and optional Chiyi client.
+- Node.js `22` for the poster project runtime and automated tests.
+- Four installer targets: `agents`, `codex`, `claude`, and `hermes`.
+- Image-led, layered, and deterministic production are chosen by design needs; deterministic local production also provides a fallback on every host.
+- External or billed image capabilities are optional host adapters and require authorization for each bounded call budget.
+- Hermes remains the only target that also installs the optional `chiyi-image-generation` Skill and Chiyi plugin.
+
+The repository does not configure a host, store credentials, publish a poster, or make an image request during installation or tests.
+
+## Prepare The Checkout
+
+Clone the repository with an account that has access, then enter the checkout:
+
+```bash
+git clone https://github.com/feariangod/hermes-post-design.git
+cd hermes-post-design
+```
+
+On macOS or Linux:
+
+```bash
+python3 --version
+python3 -m venv .venv
+./.venv/bin/python -m pip install -e ".[test]"
+npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
+```
+
+On Windows PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+./.venv/Scripts/python.exe -m pip install -e ".[test]"
+npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
+```
+
+Keep `npm ci` project-local. Do not install these dependencies globally or copy the source checkout's `node_modules` into an installed Skill.
+
+In the source checkout, `npm ci` installs test dependencies without preparing fonts. Font preparation runs only inside initialized poster projects. Python tests also use the Node renderer, and the `test` extra includes the build tools needed by wheel tests.
+
+## Install The Skill
+
+Choose isolated home variables for the examples below. `AGENTS_HOME` and `CLAUDE_HOME` are shell conveniences passed through `--home`; the installer also understands the native `CODEX_HOME` and `HERMES_HOME` defaults.
+
+```bash
+AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+```
+
+Always preview first. These dry runs report the managed paths and write nothing:
+
+```bash
+./.venv/bin/hermes-post-design install-skill --target agents --home "$AGENTS_HOME"
+./.venv/bin/hermes-post-design install-skill --target codex --home "$CODEX_HOME"
+./.venv/bin/hermes-post-design install-skill --target claude --home "$CLAUDE_HOME"
+./.venv/bin/hermes-post-design install-skill --target hermes --home "$HERMES_HOME"
+```
+
+After reviewing the dry-run output, apply only the selected target:
+
+<details>
+<summary>Agents</summary>
+
+```bash
+./.venv/bin/hermes-post-design install-skill --target agents --home "$AGENTS_HOME" --apply
+```
+
+</details>
+
+<details>
+<summary>Codex</summary>
+
+```bash
+./.venv/bin/hermes-post-design install-skill --target codex --home "$CODEX_HOME" --apply
+```
+
+</details>
+
+<details>
+<summary>Claude</summary>
+
+```bash
+./.venv/bin/hermes-post-design install-skill --target claude --home "$CLAUDE_HOME" --apply
+```
+
+</details>
+
+<details>
+<summary>Hermes</summary>
+
+```bash
+./.venv/bin/hermes-post-design install-skill --target hermes --home "$HERMES_HOME" --apply
+```
+
+</details>
+
+These examples use macOS/Linux shell syntax. On Windows PowerShell, replace `./.venv/bin/hermes-post-design` with `./.venv/Scripts/hermes-post-design.exe` and pass a quoted absolute path to `--home`, or omit `--home` to use the default target root. For example, preview Codex with `./.venv/Scripts/hermes-post-design.exe install-skill --target codex`; add `--apply` only after reviewing the preview. Shell variables shown above are not PowerShell environment-variable syntax.
+
+Without `--home`, the target roots are:
+
+```text
+agents -> $HOME/.agents
+codex  -> $CODEX_HOME or $HOME/.codex
+claude -> $HOME/.claude
+hermes -> $HERMES_HOME or $HOME/.hermes
+```
+
+The common Skill is installed at `skills/poster-design` for Agents, Codex, and Claude, and at `skills/creative/poster-design` for Hermes. Hermes additionally receives:
+
+```text
+skills/media/chiyi-image-generation
+plugins/image_gen/chiyi
+```
+
+Apply creates a timestamped backup under `<host-home>/backups/hermes-post-design/`. The Python API `restore_install(target, home, backup)` restores exactly the paths recorded by that target-aware backup. The legacy Hermes command remains available:
+
+```bash
+./.venv/bin/hermes-post-design restore --hermes-home "$HERMES_HOME" --backup "$HERMES_HOME/backups/hermes-post-design/<timestamp>"
+```
+
+## Creative Workflow
+
+Start with the audience, first-glance message, action, information hierarchy, and brand constraints. Record this design agreement in `poster.json.design`, plan original/editable/generated layers, then choose production:
+
+```text
+emotional key visual + sparse copy -> image-led
+authentic product/logo/person + visual environment -> layered
+dense or frequently revised information -> deterministic
+unclear composition -> optional inexpensive studies -> one selected Concept
+confirmed Concept -> scoped refinement -> Publish / requested Release
+```
+
+Use a known direction directly. Studies compare composition without fabricating unresolved facts. Confirmation records locked principles and flexible details so readability improvements do not automatically reopen the direction. Direction revisions and authorized image calls have separate budgets. Fonts are selected by heading/body/numeral role, with evidenced project-local custom fonts supported.
+
+## Select A Host Adapter
+
+After choosing production, read the installed Skill's [host-adapters.md](../src/hermes_post_design/resources/skills/creative/poster-design/references/host-adapters.md) and inspect available capabilities. Generate only the layers that benefit from it; an available image tool does not override an information-led design. The deterministic local route uses project-local HTML, CSS, fonts, and authorized assets, with the same applicable delivery gates.
+
+Before any billed or external image call, establish explicit authorization for the capability, external/billing implications, outputs, and bounded call budget. Honor an existing authorization covering the same operation and remaining budget without asking repeatedly. Visual approval alone is not call authorization. Count all attempts; after an ambiguous failure, stop and reconcile before any duplicate attempt or failover, with explicit approval acknowledging the uncertainty.
+
+Credentials must stay outside the repository. Keep provider keys in the host's secret store or process environment, never in project JSON, logs, errors, command arguments, committed `.env` files, or generated evidence.
+
+## Create A Poster Project
+
+The installed Skill includes a self-contained [local runtime guide](../src/hermes_post_design/resources/skills/creative/poster-design/references/local-runtime.md) covering initialization, preparation, rendering, inspection, Release evidence, and handoff without this repository.
+
+Run the installed Skill through the current host, or initialize the same local runtime directly:
+
+```bash
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+node "$CODEX_HOME/skills/poster-design/scripts/init-poster.mjs" \
+  --output ./poster-project \
+  --title "Event poster" \
+  --type digital \
+  --width 1080 \
+  --height 1920
+cd poster-project
+npm ci
+npm run prepare
+```
+
+The example uses the Codex installation. For other targets, substitute the installed Skill path listed above. On PowerShell, pass that absolute path directly rather than using the shell variable. Choose a new output directory; initialization does not overwrite an existing project.
+
+`npm ci` belongs inside each initialized project. It materializes pinned Fontsource packages, Playwright, and inspection dependencies without relying on the source checkout. `font-config.json` chooses heading, body, and numeral families; the starter uses only Noto Sans SC. `npm run prepare` copies selected bundled families' complete WOFF2 shards and licenses, or validates evidenced project-local custom fonts. Projects without this config retain the legacy three-family set. Rendering and inspection make no network calls.
+
+The project starts in `intake` with provider `deterministic-local`, `external=false`, `billed=false`, and zero authorized or used calls. `poster.json` owns workflow stage, approved copy, and the design agreement. `brief.json` owns facts and QR destinations; `poster.config.json` owns canvas dimensions. Every visible Release string must use `data-copy` or `data-fact`. Record every non-font file below `assets/` in `asset-manifest.json`; the starter's empty manifest is valid when no external assets are used. Update `poster.html`, `styles.css`, and those contracts as the work advances. Then render and inspect:
+
+```bash
+npm run render
+npm run inspect
+```
+
+Concept output must remain labeled as awaiting confirmation. A rendered PNG is not by itself a Publish or Release claim. Publish requires user confirmation plus applicable QA evidence; Release requires the stricter final-state, artifact, source, font, license, and visual-review evidence enforced by `npm run inspect:final`.
+
+The renderer resolves an explicit browser first and otherwise searches normal Chrome, Edge, and Playwright locations on macOS, Linux, and Windows. Install Playwright Chromium only when no compatible local browser is available:
+
+```bash
+npx playwright install chromium
+```
+
+## Optional Hermes Chiyi Adapter
+
+The Hermes target preserves the existing Chiyi workflow. The following commands are optional and are not part of the common installation. Return to the repository root for the `./.venv/bin/` commands. Store `CHIYI_IMAGE_API_KEY` through the normal Hermes secret/configuration flow, then enable and select the provider with current Hermes controls:
+
+```bash
+hermes plugins enable chiyi
+hermes tools
+./.venv/bin/hermes-post-design doctor --hermes-home "$HERMES_HOME" --json
+```
+
+The provider fixes model `gpt-image-2`, quality `high`, one output image, and exact requested dimensions. The standalone CLI reads the key only from the process environment. The next command contacts an external image service and may incur charges; run it only within the explicit authorization and call budget described above:
+
+```bash
+./.venv/bin/hermes-post-design generate "A typographic event poster" --size 1080x1920 --output-dir ./artifacts
+```
+
+It validates sources and outputs, blocks private or local remote targets, bounds input size and decoded pixels, disables redirects on paid POST requests, retries only one explicit HTTP `429`, and redacts credentials and sensitive payloads from errors.
+
+## Architecture
+
+```text
+Agents / Codex / Claude / Hermes
+              |
+              v
+     portable poster-design Skill
+              |
+     design agreement + layer plan
+                 |
+      production choice + host adapter
+       /          |           \
+image-led      layered     deterministic
+       \          |           /
+        +---------+----------+
+                 v
+       project-local runtime
+ init -> prepare -> render -> inspect -> evidence
+```
+
+The installed Skill carries its templates, runtime scripts, pinned project dependencies, stage contracts, and QA rules. Generated artifacts, dependencies, credentials, host state, and backups are filtered out of the canonical install and Python wheel.
+
+## Development And Verification
+
+From the repository root, run the repository checks without contacting an image service. The checkout preparation above is required because Python tests also exercise the Node runtime:
+
+```bash
+./.venv/bin/python -m pytest -q -o "addopts="
+npm test --prefix src/hermes_post_design/resources/skills/creative/poster-design
+node --test tests/runtime/*.test.mjs
+git diff --check
+```
+
+To evaluate an existing deterministic forward-test project, set `FORWARD_TEST_WORKDIR` to its directory, then run:
+
+```bash
+./.venv/bin/python tests/evaluate_forward_test.py --workdir "$FORWARD_TEST_WORKDIR"
+```
+
+The forward-test evaluator checks the PNG signature and dimensions, rejects blank or nearly uniform pixels, independently re-renders the deterministic SVG with a trusted local Playwright renderer, requires exact RGBA pixel-hash parity, verifies the visible awaiting-confirmation source label and Concept state, checks deterministic-local provider counters, and rejects positive Publish or Release readiness claims.
+
+CI runs Python `3.11`, `3.12`, and `3.13`; Node `22`; clean and deliberately polluted wheel comparisons; Git-tracked canonical Skill file/hash parity; and isolated install/restore smoke tests for all four host targets. Test adapters and image results are deterministic local fixtures. They do not submit paid or external requests.
+
+## Repository Hygiene
+
+The resource filter and package configuration exclude dependency trees, caches, build output, generated media, reports, host homes, sessions, state databases, backups, configuration, and credentials. External assets, fonts, generated media, model outputs, and user-supplied material retain their own terms and must be recorded in the project evidence when used.
+
+## License
+
+MIT for repository code and templates. Bundled project fonts retain the licenses recorded in their project-local manifests.
