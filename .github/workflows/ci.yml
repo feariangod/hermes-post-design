@@ -16,11 +16,17 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/hermes_post_design/resources/skills/creative/poster-design/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: python -m pip install -e ".[test]"
+      - run: npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
       - run: python -m pytest -q -o "addopts="
 
   poster-runtime:

@@ -34,6 +34,8 @@ npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design
 
 Keep `npm ci` project-local. Do not install these dependencies globally or copy the source checkout's `node_modules` into an installed Skill.
 
+In the source checkout, `npm ci` installs test dependencies without preparing fonts. Font preparation runs only inside initialized poster projects. Python tests also use the Node renderer, and the `test` extra includes the build tools needed by wheel tests.
+
 ## Install The Skill
 
 Choose isolated home variables for the examples below. `AGENTS_HOME` and `CLAUDE_HOME` are shell conveniences passed through `--home`; the installer also understands the native `CODEX_HOME` and `HERMES_HOME` defaults.

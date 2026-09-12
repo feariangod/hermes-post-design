@@ -5,7 +5,10 @@ from hashlib import sha256
 from pathlib import Path
 from zipfile import ZipFile
 
+import pytest
+
 from hermes_post_design.install import _should_include_resource
+from tests.skill_inventory import assert_file_hash_parity, git_tracked_file_hashes
 
 
 FORBIDDEN_PARTS = {
@@ -69,13 +72,13 @@ def _copy_clean_project(destination: Path) -> Path:
 
 
 def _build_wheel(project: Path, output: Path) -> tuple[tuple[str, ...], dict[str, str]]:
-    subprocess.run(
+    completed = subprocess.run(
         [sys.executable, "-m", "pip", "wheel", ".", "--no-deps", "--no-build-isolation", "-w", str(output)],
         cwd=project,
-        check=True,
         capture_output=True,
         text=True,
     )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
     wheel = next(output.glob("*.whl"))
     with ZipFile(wheel) as archive:
         names = tuple(sorted(archive.namelist()))
@@ -85,6 +88,40 @@ def _build_wheel(project: Path, output: Path) -> tuple[tuple[str, ...], dict[str
             if "resources" in Path(name).parts and not name.endswith("/")
         }
     return names, resource_hashes
+
+
+def test_wheel_build_failure_reports_backend_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIP_NO_INDEX", "1")
+    (tmp_path / "pyproject.toml").write_text(
+        '[build-system]\nrequires = []\nbuild-backend = "missing_ci_build_backend"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="missing_ci_build_backend"):
+        _build_wheel(tmp_path, tmp_path / "wheel")
+
+
+def test_wheel_matches_tracked_skill_after_npm_ci(tmp_path):
+    skill_relative = Path("src/hermes_post_design/resources/skills/creative/poster-design")
+    expected = git_tracked_file_hashes(_project_root(), _project_root() / skill_relative)
+    project = _copy_clean_project(tmp_path / "project")
+    installed = subprocess.run(
+        ["npm", "ci", "--offline", "--no-audit", "--no-fund"],
+        cwd=project / skill_relative,
+        capture_output=True,
+        text=True,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+
+    entries, hashes = _build_wheel(project, tmp_path / "wheel")
+    prefix = "hermes_post_design/resources/skills/creative/poster-design/"
+    actual = {
+        name.removeprefix(prefix): digest
+        for name, digest in hashes.items()
+        if name.startswith(prefix)
+    }
+    assert_clean_entries(entries)
+    assert_file_hash_parity(expected, actual, "wheel Skill after npm ci")
 
 
 def test_wheel_excludes_polluted_resource_tree(tmp_path):

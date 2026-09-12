@@ -21,6 +21,8 @@ hermes-post-design = "hermes_post_design.cli:main"
 [project.optional-dependencies]
 test = [
     "pytest>=8,<10",
+    "setuptools>=68",
+    "wheel",
 ]
 
 [tool.setuptools]
