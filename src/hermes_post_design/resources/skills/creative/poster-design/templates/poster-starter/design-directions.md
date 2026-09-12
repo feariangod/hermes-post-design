@@ -2,9 +2,10 @@
 
 ## Design Rationale
 
-Keep current decisions and approval evidence in `poster.json.design`; use these notes only to explain them.
+Keep the selected creative proposition in `poster.json.direction` and current decisions and approval evidence in `poster.json.design`; use these notes only to explain them.
 
 - Why this direction communicates the first-glance message:
+- How copy, typography, imagery, composition, color, and material carry or deliberately support that proposition:
 - Why this production route fits the information and authentic assets:
 - Original, editable, and generated layer interactions:
 

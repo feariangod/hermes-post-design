@@ -94,6 +94,7 @@ Release retains the existing strict publication engine. A final Release poster p
 
 - Every critical `brief.json` fact appears at its intended `data-fact` binding and matches after normalization.
 - Every fact/QR binding is declared and visibly rendered; hidden or undeclared bindings block release.
+- Every approved readable string, including the title, uses genuinely visible DOM text or SVG `<text>`. Image/path-only lettering, `alt`, accessibility labels, and hidden or covered replacement text do not satisfy this contract; follow the stage-specific treatment in `typography.md`.
 - No unresolved placeholder, pseudo-character, stale copy, invented claim, overflow, clipping, unintended overlap, or unreadably small critical text.
 - Mobile and physical-viewing typography meet declared thresholds.
 

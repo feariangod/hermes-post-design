@@ -25,6 +25,10 @@ artifacts/*
 *.gif
 *.pdf
 
+# Reviewed README showcase only; keep other generated media untracked.
+!docs/assets/ai-competition-concept.png
+!docs/assets/ai-competition-comparison.png
+
 # Secrets and local Hermes state
 .env
 .env.*

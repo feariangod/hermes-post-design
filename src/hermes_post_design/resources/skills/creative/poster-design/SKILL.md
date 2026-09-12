@@ -23,6 +23,8 @@ Carry one brief-specific creative proposition through the whole poster. Copy, ty
 5. Before composing or accepting readable text, read [typography.md](references/typography.md). Decide how type expresses or supports the idea, then choose heading, body, and numeral roles using local licensed fonts and exact approved copy.
 6. Before reporting a study, Concept, Publish, or Release result, read [quality-rubric.md](references/quality-rubric.md). Review creative expression and technical correctness in the actual viewing context; address the highest-impact problems first.
 
+Before initializing, preparing, rendering, inspecting, or handing off a local poster project, read [local-runtime.md](references/local-runtime.md). It contains the installed Skill's self-contained commands and evidence sequence.
+
 ## Stages
 
 ```text

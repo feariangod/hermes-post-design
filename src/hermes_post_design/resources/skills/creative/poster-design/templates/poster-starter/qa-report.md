@@ -64,6 +64,19 @@
 - Target PNG SHA-256:
 - Mobile PNG SHA-256:
 
+## Creative Review
+
+Judge the actual rendered artifacts separately from technical QA. Use `not reviewed` when visual evidence is unavailable; a technical PASS does not establish creative success. These verdicts are review notes, not workflow states.
+
+- Creative proposition from `poster.json.direction`:
+- Intended meaning/feeling and what is visible in the reviewed image:
+- Brief-specific relationship across copy, typography, and imagery:
+- Typography expression or justified restraint:
+- Expression at the declared viewing contexts and artifacts reviewed:
+- Creative verdict: not reviewed
+- Concrete observation supporting the verdict:
+- Highest-impact expressive gap, scoped fix, and recheck result:
+
 ## Findings And Revisions
 
 Prioritize one to three high-impact visual findings; record every hard blocker separately.

@@ -58,8 +58,8 @@ def skill_root() -> Path:
 
 
 @pytest.fixture
-def readme() -> str:
-    return (Path(__file__).resolve().parents[1] / "README.md").read_text(
+def operator_guide() -> str:
+    return (Path(__file__).resolve().parents[1] / "docs/guide.md").read_text(
         encoding="utf-8"
     )
 
@@ -141,7 +141,7 @@ def test_asset_policy_requires_structured_release_manifest(skill_root):
         assert f"`{field}`" in body
 
 
-def test_readme_documents_every_portable_install_target(readme):
+def test_operator_guide_documents_every_portable_install_target(operator_guide):
     homes = {
         "agents": "AGENTS_HOME",
         "codex": "CODEX_HOME",
@@ -149,26 +149,26 @@ def test_readme_documents_every_portable_install_target(readme):
         "hermes": "HERMES_HOME",
     }
     for target, home in homes.items():
-        assert f"hermes-post-design install-skill --target {target}" in readme
+        assert f"hermes-post-design install-skill --target {target}" in operator_guide
         dry_run = (
             f"hermes-post-design install-skill --target {target} "
             f'--home "${home}"'
         )
         apply = f"{dry_run} --apply"
-        assert dry_run in readme
-        assert apply in readme
-        assert readme.index(dry_run) < readme.index(apply)
+        assert dry_run in operator_guide
+        assert apply in operator_guide
+        assert operator_guide.index(dry_run) < operator_guide.index(apply)
 
 
-def test_readme_documents_portable_local_runtime(readme):
-    assert "python3 -m venv .venv" in readme
-    assert "./.venv/bin/python -m pip install -e \".[test]\"" in readme
-    assert "npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design" in readme
-    assert "host-adapters.md" in readme
-    assert "deterministic local" in readme.lower()
+def test_operator_guide_documents_portable_local_runtime(operator_guide):
+    assert "python3 -m venv .venv" in operator_guide
+    assert "./.venv/bin/python -m pip install -e \".[test]\"" in operator_guide
+    assert "npm ci --prefix src/hermes_post_design/resources/skills/creative/poster-design" in operator_guide
+    assert "host-adapters.md" in operator_guide
+    assert "deterministic local" in operator_guide.lower()
 
 
-def test_readme_documents_external_call_and_secret_boundaries(readme):
-    assert "Before any billed or external image call" in readme
-    assert "explicit authorization" in readme
-    assert "Credentials must stay outside the repository" in readme
+def test_operator_guide_documents_external_call_and_secret_boundaries(operator_guide):
+    assert "Before any billed or external image call" in operator_guide
+    assert "explicit authorization" in operator_guide
+    assert "Credentials must stay outside the repository" in operator_guide
