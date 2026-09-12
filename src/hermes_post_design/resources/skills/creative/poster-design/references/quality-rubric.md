@@ -2,6 +2,18 @@
 
 Quality gates scale with the delivery responsibility. Concept proves the direction, Publish proves the directly shareable PNG, and Release proves the complete publication package. Never apply a lower stage label to a higher-responsibility claim.
 
+## Design review
+
+Choose viewing checks in `design.reviewContexts` before production. Inspect the full canvas and the relevant real-use view: phone-size for phone sharing, representative thumbnail/crop for feeds, physical-size and viewing-distance checks for print. A generated mobile preview is supplementary for print, not proof of print quality.
+
+Ask what is seen first, what is understood next, and whether the intended action can be found. Review hierarchy, density, contrast, rhythm, negative space, brand character, and integration of original assets. Review identity/product treatment at full size as well as thumbnail scale.
+
+Report one to three highest-impact findings with location, observed problem, intended improvement, and scoped fix. Hard blockers still all need recording. Fix the problem and recheck; do not assign aesthetic PASS from file presence, a successful render, or a numerical score alone. State unverified visual checks honestly.
+
+## Composition study gates
+
+Studies need clear alternative compositions, comparable scale/aspect ratio, readable displayed approved copy, and no invented facts or misleading identity claim. They may omit unresolved facts and leave blank zones. Label them `composition study - not for publication`; do not apply final-size, complete-copy, QR, or Release gates to these early comparisons. Develop the selected study into one complete Concept before asking for publication-stage approval.
+
 ## Concept gates
 
 A Concept passes when:
@@ -11,13 +23,13 @@ A Concept passes when:
 - the subject, visual center, hierarchy, and intended action are judgeable;
 - every intended readable string matches approved copy character by character after declared normalization;
 - no unintended readable text, gibberish, fake brand, fake URL, invented label, or extra claim appears;
-- every visible fact or claim matches the approved fact contract; unavailable facts use only approved neutral placeholders or empty reserved zones;
+- every visible fact or claim matches the approved fact contract; unavailable facts use only approved neutral placeholders, empty zones, or explicit user-requested omission as recorded in `intake.md`;
 - when technical action correctness matters, the action follows an authorized reference or its phase, joints, grip, equipment contact, and balance pass review from visible pixels; style language alone is not evidence;
 - unbranded people, clothing, products, and equipment contain no logo-like marks, brand-like marks, pseudo-lettering, signature shapes, or sponsor-style graphics;
-- an actual phone-scale render, normally 360px wide, proves headline, subheading, facts, and call-to-action readability; do not infer mobile readability from the full-size canvas;
+- the full canvas and declared viewing-context renders prove the intended hierarchy and critical readability; for phone delivery use an actual phone-scale render, normally 360px wide;
 - supplied real assets were not silently replaced without disclosure;
 - there is no fake QR; a missing URL uses an explicit empty slot;
-- text failures have completed the bounded repair sequence: one targeted compatible-tool correction, then deterministic coverage if needed, followed by complete reinspection;
+- text failures are repaired locally or within the bounded authorized image-edit sequence, with deterministic coverage for repeated failures and complete reinspection;
 - the output is labeled `concept — awaiting confirmation`.
 
 Concept text may be generated and non-editable, but wrong, clipped, fabricated, or unapproved readable text blocks delivery. Text repair is a defect fix and does not consume the direction revision.
@@ -53,11 +65,11 @@ A Publish PNG passes when:
 - final PNG decoded dimensions equal the requested `size`;
 - the image is non-empty and visually coherent;
 - no severe clipping, generation artifact, broken composite edge, or unintended overlap;
-- the call to action and critical facts remain readable at phone scale;
-- the image remains faithful to the `visual_locked` concept rather than introducing a new direction;
+- the call to action and critical facts remain readable in the declared delivery contexts, including phone scale for phone delivery;
+- the image respects `design.approval.locked`; changes within `flexible` are permitted, while changes to locked principles have renewed user confirmation;
 - `publish-qa.json` reports `PASS` for size, facts, identity, logo, QR when applicable, mobile, and artifacts.
 
-Allow one targeted Publish defect-fix cycle. A failed compatible-tool correction escalates only the failing element to a deterministic layer; do not restart concept exploration.
+Prioritize the highest-impact defects and repair them within the approved scope and call budget. Local fixes do not consume direction revisions. A failed image-tool correction escalates the affected element to deterministic treatment; do not restart concept exploration for a spacing or text defect. Existing `publish-qa.json.mobile` remains a required runtime check; for print it supplements, not replaces, the recorded physical-context review.
 
 ## Release gates
 
@@ -74,7 +86,7 @@ Release retains the existing strict publication engine. A final Release poster p
 
 - All images decode and have sufficient source resolution.
 - Identity-bearing images use authorized sources.
-- Fonts are bound by the font manifests and pinned license policy; every non-font asset is bound by `asset-manifest.json`.
+- Fonts are bound by manifests and the selected bundled/custom license policy; every non-font asset is bound by `asset-manifest.json`.
 - Every visible Release string is bound by `data-copy` or `data-fact`, and the complete visible `data-copy` multiset matches `poster.json.approvedCopy`.
 - Every `file:` resource stays inside the project; resource symlinks and network resources are blocked.
 - Project HTML is static; active content and external requests are rejected.
@@ -93,6 +105,8 @@ Use the selected host adapter's compatible visual-analysis capability, or direct
 Automated PASS is not final status. `visual-review.json` is an audit declaration, not cryptographic reviewer authentication.
 
 ## Release blocking codes
+
+Invalid or unverified font-role/custom-font configuration blocks with `FONT_CONFIG_INVALID` in addition to the manifest and binary checks below.
 
 `CONFIG_INVALID`, `BRIEF_INVALID`, `POSTER_STATE_INVALID`, `PUBLISH_QA_INVALID`, `ACTIVE_CONTENT`, `ASSET_OUTSIDE_PROJECT`, `EXTERNAL_RESOURCE_BLOCKED`, `ASSET_LICENSE_INVALID`, `ASSET_LICENSE_MISSING`, `ASSET_HASH_MISMATCH`, `UNRESOLVED_PLACEHOLDER`, `COPY_MISMATCH`, `COPY_UNBOUND`, `COPY_NOT_VISIBLE`, `ELEMENT_OVERFLOW`, `MIN_FONT_SIZE`, `MOBILE_CRITICAL_SIZE`, `BROKEN_IMAGE`, `UNDECLARED_FONT`, `FONT_SOURCE_INVALID`, `FONT_MANIFEST_INVALID`, `FONT_MANIFEST_MISMATCH`, `FONT_FILE_MISSING`, `FONT_PATH_INVALID`, `FONT_HASH_MISMATCH`, `FONT_BINARY_INVALID`, `FONT_BINARY_FAMILY_MISMATCH`, `FONT_GLYPH_MISSING`, `FONT_POSTER_GLYPH_MISSING`, `FONT_LICENSE_MISSING`, `FONT_LICENSE_BINDING_MISMATCH`, `FONT_LOAD_FAILED`, `FACT_CARDINALITY`, `FACT_MISMATCH`, `FACT_NOT_VISIBLE`, `FACT_UNDECLARED`, `QR_CARDINALITY`, `QR_NOT_VISIBLE`, `QR_UNDECLARED`, `QR_DECODE_FAILED`, `QR_PAYLOAD_MISMATCH`, `QR_TOO_SMALL`, `QR_MOBILE_TOO_SMALL`, `SOURCE_MISSING`, `SOURCE_INVALID`, `RENDER_MANIFEST_INVALID`, `SOURCE_HASH_MISMATCH`, `OUTPUT_HASH_MISMATCH`, `OUTPUT_MISSING`, `OUTPUT_EMPTY`, `OUTPUT_INVALID`, `OUTPUT_BLANK`, `OUTPUT_STALE`, `PNG_SIZE_MISMATCH`, `MOBILE_SIZE_MISMATCH`, `PDF_PAGE_COUNT`, `PDF_SIZE_MISMATCH`, `STATUS_NOT_FINAL`, `PUBLISH_QA_NOT_PASS`, `VISUAL_REVIEW_MISSING`, `VISUAL_REVIEW_INVALID`, `VISUAL_REVIEW_STALE`, `VISUAL_REVIEW_FAILED`, `QA_NARRATIVE_STALE`.
 

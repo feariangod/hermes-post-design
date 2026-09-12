@@ -1,10 +1,10 @@
 # Concept Directions and Prompt Compilation
 
-Use this reference only before Concept generation. Select one archetype, make its visible design choices concrete, then compile one prompt. Archetypes are starting structures, not fixed visual styles.
+Use before choosing a Concept direction. Select an archetype for the communication need, make its visible choices concrete, then compose locally or compile a prompt for the layers needing generation. Archetypes are starting structures, not fixed styles.
 
 ## Direction option format
 
-When the user has no explicit visual direction or reference, offer two or three text-only options. Each option contains:
+Skip options when the direction is clear. When it is not, compare two or three inexpensive composition studies, or text options if that is the user's preference. Each direction contains:
 
 - a short direction name;
 - one-sentence visual proposition;
@@ -12,7 +12,9 @@ When the user has no explicit visual direction or reference, offer two or three 
 - palette and material language;
 - one sentence explaining the fit.
 
-Do not generate preview images at this gate. After selection, combine compatible details from only the selected option; do not create a hybrid of every option.
+Studies test different reading orders, subject scales, silhouettes, and negative space, not just palette swaps. Keep facts, core copy, aspect ratio, and comparison scale consistent. Unknown dates or unapproved details may stay absent or blank; displayed approved strings remain exact. Label each `composition study - not for publication` and state the decision it helps make. Use local wireframes or authorized low-cost images; do not spend full Concept effort on every study.
+
+Recommend the strongest direction for the objective and explain the trade-off briefly. After selection, develop only that direction. Selecting studies does not consume `conceptRevision`; generated studies still consume authorized image calls.
 
 ## Archetypes
 
@@ -34,7 +36,7 @@ Do not generate preview images at this gate. After selection, combine compatible
 - **Text budget:** one forceful headline, one short subheading, one call to action; data only when approved.
 - **Craft controls:** low or tracking camera, directional blur confined to secondary edges, hard rim light, grounded contact shadow, disciplined brand-like palette. Choose a real action phase first, then align crop, body, prop, and type around that phase.
 - **Failure modes:** noisy montage, anatomically impossible action, wrong equipment, detached or implausibly enlarged prop, forcing the prop axis to contradict real biomechanics, title covering the face or action joint.
-- **Risk:** when technical action correctness is required, use an authorized action reference or choose a phase whose joints, grip, equipment contact, and balance can be verified from visible pixels; style words are not proof of biomechanics. A real athlete, kit, sponsor, team mark, or product must use authorized assets and Publish protection.
+- **Risk:** when technical action correctness is required, use an authorized action reference or choose a phase whose joints, grip, equipment contact, and balance can be verified from visible pixels; style words are not proof of biomechanics. Plan original layers for a real athlete, kit, sponsor, team mark, or product before Concept.
 
 ### 3. Product-led commercial hero
 
@@ -44,7 +46,7 @@ Do not generate preview images at this gate. After selection, combine compatible
 - **Text budget:** product name, one promise, one or two verified benefits, one action.
 - **Craft controls:** material-specific key and rim light, believable support/contact, controlled props, background contrast chosen for edge readability.
 - **Failure modes:** random props, floating geometry, redesigned packaging, unreadable label, excessive promotional badges.
-- **Risk:** package geometry, label, barcode, claims, and logo require the authorized source in Publish.
+- **Risk:** plan around the authorized product source before Concept; preserve package geometry, label, barcode, claims, and logo throughout production.
 
 ### 4. Conceptual typography
 
@@ -95,17 +97,17 @@ Compile the selected direction in this order:
 3. **Composition and information zones** — hero scale/position, title, support, facts/action zones, safe margins, depth, and reading order.
 4. **Subject and asset roles** — subject/action, hero prop, camera, lighting, and explicit content/style/layout role for every reference.
 5. **Approved copy hierarchy** — exact approved strings grouped as headline, subheading, facts, call to action, and permitted microcopy; allow no invented readable text.
-6. **Constraints and output** — single finished poster, prohibited content/artifacts, exact dimensions, and provider constraints.
+6. **Constraints and output** — the requested layer, composition study, or single Concept poster; prohibited artifacts, dimensions, and documented provider constraints. A background-layer prompt must exclude text and identity elements that will be composed locally.
 
 ## Normalization
 
 - Remove resolution theater such as `2K/4K/8K`; report measured decoded dimensions instead.
-- Ask for one finished poster, never a main-and-alternate pair, moodboard, process sheet, or option grid.
+- At the Concept step, deliver one composed poster, not a main-and-alternate pair or process sheet. Individual generation calls may produce only a background or other planned layer; do not ask the model for a flattened poster when production needs separate layers. Earlier studies are separate labeled comparisons and may be shown together.
 - Convert vague style words into visible composition, light, material, palette, lens, and typography choices.
 - Keep approved copy in one authoritative block; never repeat conflicting variants.
-- Reference preservation is semantic unless deterministic asset protection is required.
+- Treat model reference preservation as semantic; use original layers whenever fidelity is required. Respect the planned silhouette, perspective, light, and reserved text space when generating surrounding imagery.
 - Inspect unbranded subjects and equipment for logo-like marks, brand-like marks, pseudo-lettering, and signature shapes; a prompt saying “no logo” is not proof that none were generated.
-- Render an actual phone-scale review image. Headline, subheading, facts, and call to action must all remain readable; do not infer subheading or CTA readability from the full-size canvas.
+- Review actual phone-scale output for phone delivery and representative crops for feeds. For print, review physical size and viewing distance as well as the full canvas. Check the intended reading order and critical content in each context.
 
 ## Provenance boundary
 

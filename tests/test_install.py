@@ -178,12 +178,12 @@ def test_apply_install_rolls_back_replacements_when_a_switch_fails(tmp_path, mon
     real_replace = install_module.os.replace
     calls = 0
 
-    def fail_second(source, target):
+    def fail_second(source, target, **kwargs):
         nonlocal calls
         calls += 1
         if calls == 2:
             raise OSError("injected replace failure")
-        return real_replace(source, target)
+        return real_replace(source, target, **kwargs)
 
     monkeypatch.setattr(install_module.os, "replace", fail_second)
 
@@ -212,12 +212,12 @@ def test_apply_install_rolls_back_targets_and_state_when_state_publication_fails
     real_replace = install_module.os.replace
     failed = False
 
-    def fail_state_publication(source, target):
+    def fail_state_publication(source, target, **kwargs):
         nonlocal failed
-        if Path(target) == state and not failed:
+        if Path(target).name == state.name and Path(source).name.endswith(".tmp") and not failed:
             failed = True
             raise OSError("injected state publication failure")
-        return real_replace(source, target)
+        return real_replace(source, target, **kwargs)
 
     monkeypatch.setattr(install_module.os, "replace", fail_state_publication)
 
@@ -352,3 +352,65 @@ def test_restore_install_accepts_targetless_legacy_manifest_for_hermes(tmp_path)
     (backup / "manifest.json").write_text(json.dumps({"version": 1, "targets": []}), encoding="utf-8")
 
     assert restore_install("hermes", home, backup)["restored"] == []
+
+
+def test_apply_install_cleans_staging_registered_before_copy_failure(tmp_path, monkeypatch):
+    import hermes_post_design.install as install_module
+
+    home = tmp_path / "codex"
+
+    def fail_after_partial_copy(_source, destination):
+        destination.mkdir(parents=True)
+        (destination / "partial.txt").write_text("partial", encoding="utf-8")
+        raise OSError("injected copy failure")
+
+    monkeypatch.setattr(install_module, "_copy_resource_tree", fail_after_partial_copy)
+
+    with pytest.raises(OSError, match="injected copy failure"):
+        apply_install("codex", home)
+
+    residue = [
+        path
+        for path in home.rglob("*")
+        if "hermes-post-design" in path.name and path.name.endswith(".tmp")
+    ]
+    assert residue == []
+
+
+def test_apply_install_preserves_previous_state_when_rollback_is_incomplete(tmp_path, monkeypatch):
+    import hermes_post_design.install as install_module
+
+    home = tmp_path / "codex"
+    managed = home / "skills/poster-design"
+    managed.mkdir(parents=True)
+    (managed / "local.txt").write_text("before", encoding="utf-8")
+    state = home / "state/hermes-post-design"
+    state.mkdir(parents=True)
+    (state / "last-install.json").write_text('{"before": true}\n', encoding="utf-8")
+
+    real_replace = install_module.os.replace
+    publication_failed = False
+
+    def fail_state_publish_and_restore(source, target, **kwargs):
+        nonlocal publication_failed
+        source_name = Path(source).name
+        target_name = Path(target).name
+        if target_name == state.name and source_name.endswith(".tmp"):
+            publication_failed = True
+            raise OSError("injected state publication failure")
+        if publication_failed and target_name == state.name and source_name.endswith(".previous"):
+            raise OSError("injected state rollback failure")
+        return real_replace(source, target, **kwargs)
+
+    monkeypatch.setattr(install_module.os, "replace", fail_state_publish_and_restore)
+
+    with pytest.raises(RuntimeError, match="rollback was incomplete"):
+        apply_install("codex", home)
+
+    preserved = list(state.parent.glob(".hermes-post-design.*.previous"))
+    assert len(preserved) == 1
+    assert (preserved[0] / "last-install.json").read_text(encoding="utf-8") == '{"before": true}\n'
+    backup_root = home / "backups/hermes-post-design"
+    assert backup_root.is_dir()
+    assert any(backup_root.iterdir())
+

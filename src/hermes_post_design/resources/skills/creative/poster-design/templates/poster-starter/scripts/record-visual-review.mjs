@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { publishProjectFile } from './path-safety.mjs';
 
 const checkNames = ['hierarchy', 'composition', 'typography', 'coherence', 'artifacts', 'mobile'];
 
@@ -48,14 +49,9 @@ async function main() {
   };
 
   const outputPath = path.join(project, 'visual-review.json');
-  const temporaryPath = path.join(project, `.visual-review.${randomUUID()}.tmp.json`);
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(report, null, 2)}\n`);
-    await rm(outputPath, { force: true });
-    await rename(temporaryPath, outputPath);
-  } finally {
-    await rm(temporaryPath, { force: true });
-  }
+  await publishProjectFile(project, outputPath, (temporaryPath) => (
+    writeFile(temporaryPath, `${JSON.stringify(report, null, 2)}\n`)
+  ));
   process.stdout.write(`${JSON.stringify({ success: true, output: outputPath })}\n`);
 }
 

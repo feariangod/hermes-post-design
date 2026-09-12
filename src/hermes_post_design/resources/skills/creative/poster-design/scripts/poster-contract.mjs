@@ -3,6 +3,9 @@ import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as fontkit from 'fontkit';
+import { validateDesignAgreement } from './design-contract.mjs';
+export { recommendProductionRoute, validateDesignAgreement } from './design-contract.mjs';
+import { loadFontConfig, customLicensePolicy } from './font-policy.mjs';
 
 const MAX_CANVAS_DIMENSION_PX = 20_000;
 const MAX_CANVAS_AREA_PX = 100_000_000;
@@ -10,7 +13,6 @@ const MAX_PRINT_DIMENSION_MM = 2_000;
 const POSTER_STATES = ['intake', 'route_selected', 'concept', 'visual_locked', 'publish', 'release'];
 const MODE_MAX_STATE = { concept: 'visual_locked', publish: 'publish', release: 'release' };
 const PUBLISH_QA_FIELDS = ['size', 'facts', 'identity', 'logo', 'qr', 'mobile', 'artifacts'];
-const REQUIRED_FONT_FAMILIES = new Set(['Noto Sans SC', 'Noto Serif SC', 'Ma Shan Zheng']);
 const ALWAYS_APPLICABLE_PUBLISH_FIELDS = new Set(['size', 'facts', 'mobile', 'artifacts']);
 const FONT_LICENSE_POLICY = {
   'Ma Shan Zheng': {
@@ -70,10 +72,12 @@ export function validatePosterState(value) {
       issues.push(`mode ${value.mode} cannot reach state ${value.state}`);
     }
   }
-  if (!Number.isInteger(value.conceptRevision) || value.conceptRevision < 0 || value.conceptRevision > 1) {
-    issues.push('conceptRevision must be 0 or 1');
+  if (!Number.isSafeInteger(value.conceptRevision) || value.conceptRevision < 0) {
+    issues.push('conceptRevision must be a non-negative safe integer');
+  } else if (!Object.hasOwn(value, 'design') && value.conceptRevision > 1) {
+    issues.push('legacy conceptRevision must be 0 or 1; record a design agreement for a different budget');
   }
-  if (value.state === 'needs_rebrief' && value.conceptRevision !== 1) {
+  if (!Object.hasOwn(value, 'design') && value.state === 'needs_rebrief' && value.conceptRevision !== 1) {
     issues.push('needs_rebrief requires conceptRevision 1 after the direction revision is exhausted');
   }
   if (value.direction !== null && (typeof value.direction !== 'string' || value.direction.trim() === '')) {
@@ -88,6 +92,9 @@ export function validatePosterState(value) {
     issues.push('approvedCopy must be an array of non-empty strings');
   } else if (value.state !== 'intake' && value.approvedCopy.length === 0) {
     issues.push('approvedCopy must contain at least one approved string after intake');
+  }
+  if (Object.hasOwn(value, 'design')) {
+    issues.push(...validateDesignAgreement(value.design, value.state, value.conceptRevision, Array.isArray(value.approvedCopy) ? value.approvedCopy : []));
   }
 
   const provider = value.provider;
@@ -337,6 +344,19 @@ export async function validateFontManifest(project, manifest) {
   }
 
   const projectRealPath = await realpath(project);
+  let config;
+  try {
+    config = await loadFontConfig(projectRealPath);
+  } catch (error) {
+    return [fontFinding('FONT_CONFIG_INVALID', error.message)];
+  }
+  if (config.roles && (!isObject(manifest.roles) || Object.keys(manifest.roles).length !== 3
+      || Object.entries(config.roles).some(([role, family]) => manifest.roles[role] !== family))) {
+    findings.push(fontFinding('FONT_CONFIG_INVALID', 'Prepared font roles do not match font-config.json; run prepare again.'));
+  }
+  const customByFamily = new Map(config.customFonts.map((font) => [font.family, font]));
+  const licensePolicyFor = (family) => (Object.hasOwn(FONT_LICENSE_POLICY, family) ? FONT_LICENSE_POLICY[family] : null)
+    ?? (customByFamily.has(family) ? customLicensePolicy(customByFamily.get(family)) : null);
   let css = '';
   try {
     const styles = await readFile(path.join(projectRealPath, 'styles.css'), 'utf8');
@@ -403,7 +423,9 @@ export async function validateFontManifest(project, manifest) {
           const parsed = fontkit.create(buffer);
           const binaryNames = [parsed.familyName, parsed.fullName, parsed.postscriptName].filter(Boolean);
           const validFamilies = FONT_FAMILY_PREFIXES[family] ?? [];
-          if (!validFamilies.some((validFamily) => binaryNamesMatchFamily(validFamily, binaryNames))) {
+          const custom = customByFamily.get(family);
+          if (custom ? custom.file !== fontFile || custom.sha256 !== actual
+            : !validFamilies.some((validFamily) => binaryNamesMatchFamily(validFamily, binaryNames))) {
             findings.push(fontFinding('FONT_BINARY_FAMILY_MISMATCH', 'Font binary identity does not match the declared family.', {
               path: fontFile,
               declaredFamily: family,
@@ -438,7 +460,7 @@ export async function validateFontManifest(project, manifest) {
     }
 
     const licenseFile = normalizeManifestPath(font.licenseFile, 'assets/licenses/');
-    const licensePolicy = FONT_LICENSE_POLICY[family];
+    const licensePolicy = licensePolicyFor(family);
     if (!licenseFile) {
       findings.push(fontFinding('FONT_PATH_INVALID', 'Font license path must be an exact normalized path under assets/licenses/.', { index, path: font.licenseFile ?? null }));
     } else {
@@ -465,7 +487,7 @@ export async function validateFontManifest(project, manifest) {
     }
   }
 
-  for (const family of REQUIRED_FONT_FAMILIES) {
+  for (const family of config.families) {
     if (!families.has(family)) findings.push(fontFinding('UNDECLARED_FONT', 'Required bundled font family is absent from the manifest.', { family }));
   }
   for (const face of faces) {
@@ -499,16 +521,16 @@ export async function validateFontManifest(project, manifest) {
       findings.push(fontFinding('FONT_LICENSE_BINDING_MISMATCH', 'Font license manifest shape or record count is invalid.'));
     }
     for (const font of fonts.filter(isObject)) {
-      const policy = FONT_LICENSE_POLICY[font.family];
+      const policy = licensePolicyFor(font.family);
       const expected = {
         family: font.family,
         file: font.file,
         sha256: actualFontDigests.get(font.file) ?? font.sha256,
         licenseFile: policy?.licenseFile ?? null,
         licenseSha256: policy?.licenseSha256 ?? null,
-        licenseId: 'OFL-1.1',
-        licenseName: 'SIL Open Font License',
-        licenseVersion: '1.1',
+        licenseId: policy?.licenseId ?? 'OFL-1.1',
+        licenseName: policy?.licenseName ?? 'SIL Open Font License',
+        licenseVersion: policy?.licenseVersion ?? '1.1',
         sourcePackage: policy?.sourcePackage ?? null,
       };
       const exactMatches = records.filter((record) => exactLicenseRecord(record, expected));
@@ -525,8 +547,27 @@ function assetFinding(code, message, evidence = {}) {
   return { code, message, evidence };
 }
 
+function isGeneratedTransactionFile(name) {
+  return /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp(?:\.[^.]+)?$/i.test(name);
+}
+
 async function collectNonFontAssets(projectRealPath) {
   const assets = [];
+  const fontConfig = await loadFontConfig(projectRealPath);
+  const verifiedFontEvidence = new Set(fontConfig.customFonts.flatMap((font) => [
+    font.file, font.licenseFile, font.authorization.evidenceFile,
+  ]));
+  const generatedRootFiles = new Set(['poster.png', 'poster-mobile.png', 'poster.pdf']);
+  try {
+    const config = JSON.parse(await readFile(path.join(projectRealPath, 'poster.config.json'), 'utf8'));
+    for (const candidate of [config.outputs?.png, config.outputs?.mobile, config.outputs?.pdf]) {
+      if (typeof candidate === 'string' && candidate === path.basename(candidate)) generatedRootFiles.add(candidate);
+    }
+  } catch {
+    // Config validation reports malformed or unreadable configuration separately.
+  }
+  const rootAssetExtensions = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp']);
+  const managedFontExtensions = new Set(['.otf', '.ttc', '.ttf', '.woff', '.woff2']);
   async function walk(relativeDirectory) {
     const directory = path.join(projectRealPath, relativeDirectory);
     let entries;
@@ -539,17 +580,27 @@ async function collectNonFontAssets(projectRealPath) {
     for (const entry of entries) {
       const relative = path.join(relativeDirectory, entry.name);
       const normalized = relative.split(path.sep).join('/');
-      if (relativeDirectory === 'assets' && ['fonts', 'licenses'].includes(entry.name)) continue;
       const details = await lstat(path.join(projectRealPath, relative));
       if (details.isSymbolicLink()) {
         throw new Error(`Asset path must not use symbolic links: ${normalized}`);
       }
       if (details.isDirectory()) await walk(relative);
-      else if (details.isFile()) assets.push(normalized);
+      else if (details.isFile()) {
+        const extension = path.extname(entry.name).toLowerCase();
+        const managedFont = normalized === 'assets/fonts/font-manifest.json'
+          || (normalized.startsWith('assets/fonts/') && managedFontExtensions.has(extension));
+        const managedLicense = normalized === 'assets/licenses/font-license-manifest.json'
+          || (normalized.startsWith('assets/licenses/') && extension === '.txt');
+        if (!managedFont && !managedLicense && !verifiedFontEvidence.has(normalized)) assets.push(normalized);
+      }
       else throw new Error(`Asset path must be a regular file or directory: ${normalized}`);
     }
   }
   await walk('assets');
+  for (const entry of await readdir(projectRealPath, { withFileTypes: true })) {
+    if (!entry.isFile() || generatedRootFiles.has(entry.name) || verifiedFontEvidence.has(entry.name) || isGeneratedTransactionFile(entry.name)) continue;
+    if (rootAssetExtensions.has(path.extname(entry.name).toLowerCase())) assets.push(entry.name);
+  }
   return assets.sort();
 }
 
@@ -733,7 +784,7 @@ async function sha256(filePath) {
 }
 
 export async function collectProjectSourceHashes(project) {
-  const files = [
+  const files = new Set([
     'asset-manifest.json',
     'brief.json',
     'font-faces.css',
@@ -745,7 +796,23 @@ export async function collectProjectSourceHashes(project) {
     'poster.json',
     'publish-qa.json',
     'styles.css',
-  ];
+  ]);
+  try {
+    await lstat(path.join(project, 'font-config.json'));
+    files.add('font-config.json');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  const generatedRootFiles = new Set(['poster.png', 'poster-mobile.png', 'poster.pdf', 'render-result.json', 'qa-report.json', 'visual-review.json']);
+  try {
+    const config = JSON.parse(await readFile(path.join(project, 'poster.config.json'), 'utf8'));
+    for (const candidate of [config.outputs?.png, config.outputs?.mobile, config.outputs?.pdf]) {
+      if (typeof candidate === 'string' && candidate === path.basename(candidate)) generatedRootFiles.add(candidate);
+    }
+  } catch {
+    // The caller validates configuration and will report the underlying error.
+  }
+  const rootAssetExtensions = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp']);
   async function walk(relativeDirectory) {
     const directory = path.join(project, relativeDirectory);
     let entries;
@@ -760,12 +827,16 @@ export async function collectProjectSourceHashes(project) {
       const details = await lstat(path.join(project, relative));
       if (details.isSymbolicLink()) throw new Error(`Project sources must not use symbolic links: ${relative}`);
       if (details.isDirectory()) await walk(relative);
-      else if (details.isFile()) files.push(relative);
+      else if (details.isFile()) files.add(relative);
     }
   }
   await walk('assets');
-  files.sort();
-  return Object.fromEntries(await Promise.all(files.map(async (relative) => {
+  for (const entry of await readdir(project, { withFileTypes: true })) {
+    if (!entry.isFile() || generatedRootFiles.has(entry.name) || isGeneratedTransactionFile(entry.name)) continue;
+    if (rootAssetExtensions.has(path.extname(entry.name).toLowerCase())) files.add(entry.name);
+  }
+  const sortedFiles = [...files].sort();
+  return Object.fromEntries(await Promise.all(sortedFiles.map(async (relative) => {
     const sourcePath = path.join(project, relative);
     const details = await lstat(sourcePath);
     if (details.isSymbolicLink() || !details.isFile()) throw new Error(`Project source must be a regular file without symbolic links: ${relative}`);

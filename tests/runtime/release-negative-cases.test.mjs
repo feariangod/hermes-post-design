@@ -138,6 +138,14 @@ async function writeOutputs(project) {
   await writeFile(path.join(project, 'poster.pdf'), await pdf.save());
 }
 
+async function writeTinyAsset(project, relative) {
+  const image = new PNG({ width: 2, height: 2 });
+  image.data.fill(255);
+  const destination = path.join(project, relative);
+  await mkdir(path.dirname(destination), { recursive: true });
+  await writeFile(destination, PNG.sync.write(image));
+}
+
 async function writeCurrentEvidence(project) {
   const contractUrl = `${pathToFileURL(path.join(project, 'scripts/poster-contract.mjs')).href}?fixture=${Date.now()}-${Math.random()}`;
   const { collectProjectSourceHashes } = await import(contractUrl);
@@ -192,6 +200,8 @@ async function createReleaseProject(context, scenario) {
   const project = path.join(temporaryRoot, `${scenario}-poster`);
   requireSuccess(run('node', [initPoster, '--output', project, '--title', 'Release poster', '--type', 'digital']), 'node', [initPoster]);
 
+  // Preserve the legacy three-family release fixture for font-substitution cases.
+  await unlink(path.join(project, 'font-config.json'));
   await symlink(path.join(skillRoot, 'node_modules'), path.join(project, 'node_modules'), 'dir');
   requireSuccess(run('node', [path.join(project, 'scripts/prepare-project.mjs'), '--project', project]), 'node', ['scripts/prepare-project.mjs']);
   await unlink(path.join(project, 'node_modules'));
@@ -442,11 +452,31 @@ async function createReleaseProject(context, scenario) {
     await writeFile(path.join(project, 'assets/images/photo.txt'), 'recorded external asset');
     await recordAsset(project, 'assets/images/photo.txt', { attribution: '' });
   }
+  if (scenario === 'asset-root-unlicensed') {
+    await writeTinyAsset(project, 'hero.png');
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', '<img src="hero.png" alt=""></section>'));
+  }
+  if (scenario === 'asset-hidden-in-fonts') {
+    await writeTinyAsset(project, 'assets/fonts/hero.png');
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('</section>', '<img src="assets/fonts/hero.png" alt=""></section>'));
+  }
   if (scenario === 'copy-mismatch') {
     await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('Approved release content.', 'Unapproved release content.'));
   }
   if (scenario === 'copy-unbound') {
     await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace('<p data-copy>Approved release content.</p>', '<p>Approved release content.</p>'));
+  }
+  if (scenario === 'copy-mixed-unbound') {
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace(
+      '<p data-copy>Approved release content.</p>',
+      '<p>Unapproved direct text <span data-copy>Approved release content.</span></p>',
+    ));
+  }
+  if (scenario === 'font-mixed-glyph') {
+    await writeFile(htmlPath, (await readFile(htmlPath, 'utf8')).replace(
+      '<p data-copy>Approved release content.</p>',
+      '<p>𠮷<span data-copy>Approved release content.</span></p>',
+    ));
   }
   if (scenario === 'font-poster-glyph') {
     const posterPath = path.join(project, 'poster.json');
@@ -497,6 +527,12 @@ test('Release accepts the mechanically clean baseline fixture', async (context) 
   assert.deepEqual(report.blockers, []);
 });
 
+test('source hashes include a root-level render asset', async (context) => {
+  const project = await createReleaseProject(context, 'asset-root-unlicensed');
+  const renderResult = await readJson(path.join(project, 'render-result.json'));
+  assert.match(renderResult.sourceHashes['hero.png'] ?? '', /^[0-9a-f]{64}$/);
+});
+
 for (const [scenario, expectedCodes] of [
   ['system-font-substitution', ['FONT_LOAD_FAILED', 'UNDECLARED_FONT']],
   ['font-family-masquerade', ['FONT_BINARY_FAMILY_MISMATCH', 'FONT_FAMILY_MISMATCH', 'FONT_GLYPH_MISSING']],
@@ -513,9 +549,13 @@ for (const [scenario, expectedCodes] of [
   ['starter-copy', ['COPY_MISMATCH', 'COPY_UNBOUND', 'UNRESOLVED_PLACEHOLDER']],
   ['copy-mismatch', ['COPY_MISMATCH']],
   ['copy-unbound', ['COPY_MISMATCH', 'COPY_UNBOUND']],
+  ['copy-mixed-unbound', ['COPY_UNBOUND']],
+  ['font-mixed-glyph', ['COPY_UNBOUND', 'FONT_LOAD_FAILED', 'FONT_POSTER_GLYPH_MISSING']],
   ['asset-unlicensed', ['ASSET_LICENSE_MISSING']],
   ['asset-hash', ['ASSET_HASH_MISMATCH']],
   ['asset-metadata', ['ASSET_LICENSE_INVALID']],
+  ['asset-root-unlicensed', ['ASSET_LICENSE_MISSING']],
+  ['asset-hidden-in-fonts', ['ASSET_LICENSE_MISSING']],
   ['output-hash', ['OUTPUT_HASH_MISMATCH']],
   ['visual-review', ['VISUAL_REVIEW_STALE']],
   ['css-font-url', ['UNDECLARED_FONT']],

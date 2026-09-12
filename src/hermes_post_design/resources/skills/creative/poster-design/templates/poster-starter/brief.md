@@ -1,13 +1,8 @@
 # Poster Brief
 
-## Status
+## Design Agreement
 
-- Intended status: preview
-- Approved direction: not yet approved
-
-## Purpose And Audience
-
-Record the poster purpose, audience, platform or print context, deadline, and success benchmark here.
+Keep objective, audience, viewing context, first-glance message, action, information hierarchy, brand constraints, production route, layer plan, and approval scope in `poster.json.design`. Use this file for supporting context, sources, and decision rationale; do not duplicate authoritative state or approved copy.
 
 ## Canvas
 
@@ -15,7 +10,7 @@ The authoritative canvas is stored in `poster.config.json`.
 
 ## Critical Facts
 
-Record every approved name, date, price, place, contact, URL, QR destination, scientific value, unit, and claim in `brief.json`. Keep workflow mode, state, direction, provider decision, and approved readable copy only in `poster.json`; unresolved critical facts keep that workflow from reaching Release.
+Record every approved name, date, price, place, contact, URL, QR destination, scientific value, unit, and claim in `brief.json`. Keep approved readable copy in `poster.json.approvedCopy`; unresolved critical facts block Publish and Release. Studies may omit them; Concept uses only approved placeholders or empty zones.
 
 ## Assets And Rights
 

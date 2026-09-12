@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { validatePosterState } from '../../src/hermes_post_design/resources/skills/creative/poster-design/scripts/poster-contract.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const skillRoot = path.join(repositoryRoot, 'src/hermes_post_design/resources/skills/creative/poster-design');
@@ -32,12 +33,17 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
 
   run('node', [initPoster, '--output', project, '--title', 'Portable poster', '--type', 'digital']);
 
-  for (const relativePath of ['poster.json', 'publish-qa.json', 'asset-manifest.json', 'package.json', 'package-lock.json', 'font-manifest.json']) {
+  for (const relativePath of ['poster.json', 'publish-qa.json', 'asset-manifest.json', 'package.json', 'package-lock.json', 'font-manifest.json', 'font-config.json', 'scripts/design-contract.mjs', 'scripts/font-policy.mjs']) {
     await access(path.join(project, relativePath));
   }
 
   const poster = JSON.parse(await readFile(path.join(project, 'poster.json'), 'utf8'));
-  assert.deepEqual(poster, {
+  const { design, ...legacyState } = poster;
+  assert.deepEqual(validatePosterState(poster), []);
+  assert.equal(design.approval.status, 'pending');
+  assert.equal(design.route.kind, null);
+  assert.equal(design.exploration.approach, 'direct');
+  assert.deepEqual(legacyState, {
     version: 1,
     mode: 'publish',
     state: 'intake',
@@ -82,15 +88,14 @@ test('initialized poster project keeps contracts, dependencies, fonts, and licen
   assert.deepEqual(JSON.parse(await readFile(path.join(project, 'font-manifest.json'), 'utf8')), manifest);
   assert.ok(Array.isArray(manifest.fonts));
   const pinnedCssFiles = [
-    'node_modules/@fontsource/ma-shan-zheng/400.css',
     'node_modules/@fontsource-variable/noto-sans-sc/wght.css',
-    'node_modules/@fontsource-variable/noto-serif-sc/wght.css',
   ];
   const expectedFaceCount = (await Promise.all(pinnedCssFiles.map(async (relative) =>
     (await readFile(path.join(project, relative), 'utf8')).match(/@font-face\s*\{/g)?.length ?? 0
   ))).reduce((total, count) => total + count, 0);
   assert.equal(manifest.fonts.length, expectedFaceCount);
-  assert.ok(manifest.fonts.length > 250);
+  assert.ok(manifest.fonts.length > 0);
+  assert.deepEqual([...new Set(manifest.fonts.map((font) => font.family))], ['Noto Sans SC']);
   for (const font of manifest.fonts) {
     assert.deepEqual(Object.keys(font).sort(), ['family', 'file', 'licenseFile', 'samples', 'sha256', 'unicodeRange']);
     assert.equal(typeof font.family, 'string');

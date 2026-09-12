@@ -1,4 +1,4 @@
-import { lstat, mkdir, realpath, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, realpath, rename } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
@@ -70,34 +70,38 @@ export async function assertSafeDestinationPath(projectRoot, destination, option
   return target;
 }
 
-export async function ensureSafeDirectory(projectRoot, directory) {
+export async function ensureSafeDirectory(projectRoot, directory, options = {}) {
+  const fs = options.fs ?? { lstat, mkdir, realpath };
   const root = path.resolve(projectRoot);
-  const target = await assertSafeDestinationPath(root, directory);
+  const target = await assertSafeDestinationPath(root, directory, options);
   const relative = path.relative(root, target);
   let current = root;
   for (const part of relative.split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
     try {
-      const stats = await lstat(current);
+      const stats = await fs.lstat(current);
       if (redirected(stats) || !stats.isDirectory()) {
         throw new Error(`Destination directory is redirected or invalid: ${current}`);
       }
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
-      await mkdir(current);
+      await fs.mkdir(current);
     }
-    await assertSafeDestinationPath(root, current);
+    await assertSafeDestinationPath(root, current, options);
   }
   return target;
 }
 
-export async function publishProjectFile(projectRoot, destination, writer) {
+export async function publishProjectFile(projectRoot, destination, writer, options = {}) {
+  const fs = options.fs ?? { lstat, mkdir, realpath, rename };
+  const makeUuid = options.randomUUID ?? randomUUID;
+  const fsOptions = { ...options, fs };
   const root = path.resolve(projectRoot);
-  const target = await assertSafeDestinationPath(root, destination);
-  await ensureSafeDirectory(root, path.dirname(target));
-  await assertSafeDestinationPath(root, target);
+  const target = await assertSafeDestinationPath(root, destination, fsOptions);
+  await ensureSafeDirectory(root, path.dirname(target), fsOptions);
+  await assertSafeDestinationPath(root, target, fsOptions);
   try {
-    const existing = await lstat(target);
+    const existing = await fs.lstat(target);
     if (redirected(existing) || !existing.isFile()) {
       throw new Error(`Destination file is redirected or invalid: ${target}`);
     }
@@ -105,24 +109,19 @@ export async function publishProjectFile(projectRoot, destination, writer) {
     if (error.code !== 'ENOENT') throw error;
   }
 
-  const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${randomUUID()}.tmp`);
-  await assertSafeDestinationPath(root, temporary);
-  try {
-    await writer(temporary);
-    const temporaryStats = await lstat(temporary);
-    if (redirected(temporaryStats) || !temporaryStats.isFile()) {
-      throw new Error(`Prepared output is not a regular in-project file: ${temporary}`);
-    }
-    const temporaryReal = await realpath(temporary);
-    if (!isInside(root, temporaryReal)) {
-      throw new Error(`Prepared output escaped the project: ${temporary}`);
-    }
-    await assertSafeDestinationPath(root, path.dirname(target));
-    await assertSafeDestinationPath(root, target);
-    await rm(target, { force: true });
-    await rename(temporary, target);
-  } finally {
-    await rm(temporary, { force: true });
+  const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${makeUuid()}.tmp`);
+  await assertSafeDestinationPath(root, temporary, fsOptions);
+  await writer(temporary);
+  const temporaryStats = await fs.lstat(temporary);
+  if (redirected(temporaryStats) || !temporaryStats.isFile()) {
+    throw new Error(`Prepared output is not a regular in-project file: ${temporary}`);
   }
+  const temporaryReal = await fs.realpath(temporary);
+  if (!isInside(root, temporaryReal)) {
+    throw new Error(`Prepared output escaped the project: ${temporary}`);
+  }
+  await assertSafeDestinationPath(root, path.dirname(target), fsOptions);
+  await assertSafeDestinationPath(root, target, fsOptions);
+  await fs.rename(temporary, target);
   return target;
 }

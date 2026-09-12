@@ -148,6 +148,26 @@ def _run_evaluator(workdir: Path) -> subprocess.CompletedProcess:
     )
 
 
+def _run_source_renderer(source: Path, output: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [
+            "node",
+            str(SOURCE_RENDERER),
+            "--source",
+            str(source),
+            "--output",
+            str(output),
+            "--width",
+            "1080",
+            "--height",
+            "1920",
+        ],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_forward_evaluator_accepts_complete_concept_evidence(tmp_path):
     workdir = tmp_path / "work"
     workdir.mkdir()
@@ -162,6 +182,41 @@ def test_forward_evaluator_accepts_complete_concept_evidence(tmp_path):
     assert result["visible_label"] == "AWAITING CONFIRMATION"
     assert result["render_provenance"]["matches"] is True
     assert set(result["verified_hashes"]) == {"artifact", "source", "phone_scale_review"}
+
+
+def test_source_renderer_rejects_svg_scripts(tmp_path):
+    source = tmp_path / "scripted.svg"
+    source.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">'
+        '<script>document.documentElement.setAttribute("data-ran", "true")</script>'
+        '<rect width="1080" height="1920" fill="#fff"/></svg>\n',
+        encoding="utf-8",
+    )
+
+    completed = _run_source_renderer(source, tmp_path / "scripted.png")
+
+    assert completed.returncode != 0
+    assert "script" in completed.stderr.lower()
+
+
+def test_source_renderer_rejects_file_dependencies(tmp_path):
+    dependency = tmp_path / "dependency.svg"
+    dependency.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2">'
+        '<rect width="2" height="2" fill="#000"/></svg>\n',
+        encoding="utf-8",
+    )
+    source = tmp_path / "file-reference.svg"
+    source.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">'
+        f'<image href="{dependency.as_uri()}" width="1080" height="1920"/></svg>\n',
+        encoding="utf-8",
+    )
+
+    completed = _run_source_renderer(source, tmp_path / "file-reference.png")
+
+    assert completed.returncode != 0
+    assert "self-contained" in completed.stderr.lower() or "file:" in completed.stderr.lower()
 
 
 @pytest.mark.parametrize(

@@ -201,6 +201,66 @@ def _cleanup_empty_directories(paths: list[Path]) -> None:
             pass
 
 
+def _open_contained_directory(home: Path, directory: Path, label: str) -> int:
+    """Open a directory by walking from the trusted home without following redirects."""
+    _assert_contained_components(home, directory, label, leaf_kind="directory")
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_DIRECTORY", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(home, flags)
+    try:
+        for part in directory.relative_to(home).parts:
+            next_descriptor = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _replace_contained(home: Path, source: Path, target: Path, label: str) -> None:
+    """Atomically replace a managed entry using directory handles when supported."""
+    _assert_contained_components(home, source.parent, label, leaf_kind="directory")
+    _assert_contained_components(home, target.parent, label, leaf_kind="directory")
+    source_descriptor = None
+    target_descriptor = None
+    try:
+        source_descriptor = _open_contained_directory(home, source.parent, label)
+        target_descriptor = _open_contained_directory(home, target.parent, label)
+        os.replace(
+            source.name,
+            target.name,
+            src_dir_fd=source_descriptor,
+            dst_dir_fd=target_descriptor,
+        )
+    except (NotImplementedError, TypeError):
+        _assert_contained_components(home, source.parent, label, leaf_kind="directory")
+        _assert_contained_components(home, target.parent, label, leaf_kind="directory")
+        os.replace(source, target)
+    finally:
+        if source_descriptor is not None:
+            os.close(source_descriptor)
+        if target_descriptor is not None:
+            os.close(target_descriptor)
+    _assert_contained_components(home, target, label, leaf_kind="directory")
+
+
+def _remove_contained_tree(home: Path, target: Path, label: str, *, ignore_errors: bool = False) -> None:
+    if not target.exists() and not _is_redirecting_path(target):
+        return
+    try:
+        _assert_contained_components(home, target, label, leaf_kind="directory")
+        parent_descriptor = _open_contained_directory(home, target.parent, label)
+        try:
+            shutil.rmtree(target.name, dir_fd=parent_descriptor)
+        finally:
+            os.close(parent_descriptor)
+    except Exception:
+        if not ignore_errors:
+            raise
+
+
 def _should_include_resource(relative_parts: tuple[str, ...]) -> bool:
     """Return whether a resource path belongs in an installation or wheel."""
     if not relative_parts:
@@ -379,14 +439,17 @@ def apply_install(target: str, home: Path | str | None = None) -> dict:
             _mkdir_contained(install_home, managed.parent, home_label, created_directories)
             if staging.exists() or previous.exists():
                 raise FileExistsError(f"Installer transaction path already exists for {target_rel}")
-            _copy_resource_tree(root.joinpath(*source_rel.split("/")), staging)
             prepared.append((managed, staging, previous, existed))
+            _copy_resource_tree(root.joinpath(*source_rel.split("/")), staging)
 
         (backup_staging / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=True, indent=2) + "\n",
             encoding="utf-8",
         )
-        if state.exists():
+        state_existed = state.exists()
+        manifest["state"] = {"existed": state_existed}
+        if state_existed:
+            shutil.copytree(state, backup_staging / "state")
             shutil.copytree(state, state_staging)
         else:
             state_staging.mkdir()
@@ -400,33 +463,36 @@ def apply_install(target: str, home: Path | str | None = None) -> dict:
                 encoding="utf-8",
             )
 
-        os.replace(backup_staging, backup)
+        _replace_contained(install_home, backup_staging, backup, f"{home_label} backup publication")
         backup_published = True
         for managed, staging, previous, existed in [*prepared, (state, state_staging, state_previous, state.exists())]:
             if existed:
-                os.replace(managed, previous)
+                _replace_contained(install_home, managed, previous, f"{home_label} transaction")
             switched.append((managed, previous, existed))
-            os.replace(staging, managed)
+            _replace_contained(install_home, staging, managed, f"{home_label} transaction")
     except Exception:
         rollback_errors = []
         for managed, previous, existed in reversed(switched):
             try:
                 if managed.exists():
-                    shutil.rmtree(managed)
+                    _remove_contained_tree(install_home, managed, f"{home_label} rollback")
                 if existed and previous.exists():
-                    os.replace(previous, managed)
+                    _replace_contained(install_home, previous, managed, f"{home_label} rollback")
             except Exception as rollback_error:  # pragma: no cover - preserved backup is the recovery path
                 rollback_errors.append(rollback_error)
         for managed, staging, previous, _ in prepared:
             if staging.exists():
-                shutil.rmtree(staging, ignore_errors=True)
+                _remove_contained_tree(install_home, staging, f"{home_label} staging cleanup", ignore_errors=True)
             if previous.exists() and not rollback_errors:
-                shutil.rmtree(previous, ignore_errors=True)
-        for temporary in (state_staging, state_previous, backup_staging):
+                _remove_contained_tree(install_home, previous, f"{home_label} previous cleanup", ignore_errors=True)
+        state_temporaries = [state_staging, backup_staging]
+        if not rollback_errors:
+            state_temporaries.append(state_previous)
+        for temporary in state_temporaries:
             if temporary.exists():
-                shutil.rmtree(temporary, ignore_errors=True)
+                _remove_contained_tree(install_home, temporary, f"{home_label} state cleanup", ignore_errors=True)
         if backup_published and backup.exists() and not rollback_errors:
-            shutil.rmtree(backup, ignore_errors=True)
+            _remove_contained_tree(install_home, backup, f"{home_label} backup cleanup", ignore_errors=True)
         _cleanup_empty_directories(created_directories)
         if rollback_errors:
             raise RuntimeError("Installer failed and rollback was incomplete") from rollback_errors[0]
@@ -434,9 +500,9 @@ def apply_install(target: str, home: Path | str | None = None) -> dict:
     else:
         for _, _, previous, _ in prepared:
             if previous.exists():
-                shutil.rmtree(previous)
+                _remove_contained_tree(install_home, previous, f"{home_label} previous cleanup")
         if state_previous.exists():
-            shutil.rmtree(state_previous)
+            _remove_contained_tree(install_home, state_previous, f"{home_label} state cleanup")
     return {"changed": True, "backup": str(backup), "entries": [asdict(item) for item in plan]}
 
 
@@ -494,22 +560,22 @@ def restore_install(target: str, home: Path | str, backup: Path | str) -> dict:
             managed_target.parent.mkdir(parents=True, exist_ok=True)
             had_current = managed_target.exists()
             if had_current:
-                os.replace(managed_target, previous)
+                _replace_contained(install_home, managed_target, previous, f"{home_label} restore")
             switched.append((managed_target, previous, had_current))
             if existed:
-                os.replace(staging, managed_target)
+                _replace_contained(install_home, staging, managed_target, f"{home_label} restore")
             restored.append(relative)
     except Exception:
         for managed_target, previous, had_current in reversed(switched):
             if managed_target.exists():
-                shutil.rmtree(managed_target)
+                _remove_contained_tree(install_home, managed_target, f"{home_label} restore rollback")
             if had_current and previous.exists():
-                os.replace(previous, managed_target)
+                _replace_contained(install_home, previous, managed_target, f"{home_label} restore rollback")
         raise
     finally:
         for _, _, staging, previous, _ in prepared:
             if staging.exists():
-                shutil.rmtree(staging, ignore_errors=True)
+                _remove_contained_tree(install_home, staging, f"{home_label} restore staging", ignore_errors=True)
             if previous.exists():
-                shutil.rmtree(previous, ignore_errors=True)
+                _remove_contained_tree(install_home, previous, f"{home_label} restore previous", ignore_errors=True)
     return {"restored": restored, "backup": str(backup_path)}

@@ -10,26 +10,29 @@ metadata:
 
 # Poster Design
 
-Create a poster whose visual direction, readable copy, assets, and delivery claim are appropriate to the requested stage. Use only capabilities actually available in the current host.
+Design the communication first, choose the production method second, then use the capabilities actually available in the current host. A poster succeeds when its intended audience sees the right message and can take the intended action.
 
 ## Route
 
-1. Read [host-adapters.md](references/host-adapters.md) before selecting an image-led or deterministic-local route, or before any external operation.
-2. Before gathering the brief, read [intake.md](references/intake.md) to collect only what changes the route, visual direction, or factual responsibility.
-3. When no visual direction is explicit, read [concept-directions.md](references/concept-directions.md) and present two or three text-only directions before creating a concept.
-4. Before using identity-bearing, branded, product, QR, or reference assets, read [asset-policy.md](references/asset-policy.md).
-5. Before placing or accepting readable text, read [typography.md](references/typography.md).
-6. Before reporting Concept, Publish, or Release status, read [quality-rubric.md](references/quality-rubric.md).
+1. Before creating the brief, read [intake.md](references/intake.md). Record the audience, viewing context, first-glance message, action, information hierarchy, and brand constraints in `poster.json.design`.
+2. Before choosing production, read [asset-policy.md](references/asset-policy.md). Plan which layers must retain original pixels, which need editable text, and which benefit from generation. Choose image-led, layered, or deterministic production for those needs, not because an image tool exists.
+3. Read [host-adapters.md](references/host-adapters.md) before executing the chosen production method or any external operation. Check capability, existing authorization, and remaining call budget; record any necessary adaptation.
+4. When choosing or exploring a visual direction, read [concept-directions.md](references/concept-directions.md). Use an explicit direction directly; when composition is uncertain, offer two or three inexpensive studies within the agreed budget. Text options are available, not a mandatory gate.
+5. Before composing or accepting readable text, read [typography.md](references/typography.md). Choose heading, body, and numeral roles early, using local licensed fonts and exact approved copy.
+6. Before reporting a study, Concept, Publish, or Release result, read [quality-rubric.md](references/quality-rubric.md). Review the artifact in its actual viewing context and address the highest-impact problems first.
 
 ## Stages
 
 ```text
-intake -> route_selected -> concept -> user confirmation -> publish -> release when requested
+design agreement -> production route -> optional studies -> concept -> scoped confirmation -> refinement -> delivery
 ```
 
-- **Concept:** make one final-size, near-production visual through the selected route. Label it `concept — awaiting confirmation`; it is never publish-ready.
-- **Publish:** after confirmation, preserve the locked direction and make only bounded defect corrections. Deliver an exact-size PNG with the applicable Publish evidence.
-- **Release:** enter only for print, PDF, full editability, localization, regulated/high-responsibility claims, paid-campaign evidence, or a complete source package. Reuse the locked visual and apply the strict publication workflow.
+- **Studies:** optional low-cost composition comparisons, labeled `composition study - not for publication`. They may omit unresolved facts and use blank zones, but must not invent facts or misspell displayed approved copy. They are activities within `route_selected`, not finished Concepts.
+- **Concept:** develop one selected direction into a final-size, near-production visual. Label it `concept — awaiting confirmation`; it is never publish-ready.
+- **Publish:** record what the user approved and what may still change. Refine typography, spacing, crop, and factual details within that scope; deliver an exact-size PNG with applicable Publish evidence.
+- **Release:** enter only for print, PDF, full editability, localization, regulated/high-responsibility claims, paid-campaign evidence, or a complete source package. Apply the strict publication workflow to the approved design.
+
+Runtime stages remain `intake -> route_selected -> concept -> visual_locked -> publish -> release`, with `needs_rebrief` for a diagnosed brief conflict. Studies and refinements do not add stages.
 
 Do not invent unresolved critical facts. A generated readable string is not proof of a true claim. Independently verify names, dates, prices, places, URLs, contacts, rules, QR destinations, and scientific, legal, medical, or financial statements against the approved fact contract.
 
@@ -37,10 +40,11 @@ Do not invent unresolved critical facts. A generated readable string is not proo
 
 - A user approving a brief or visual direction does not authorize a billed or external operation. Follow the explicit authorization and failure rules in [host-adapters.md](references/host-adapters.md).
 - Do not advance from Concept until the user confirms the visual direction.
-- After confirmation, preserve composition, visual center, palette, subject scale, information zones, and mood. Escalate a repeated failing element to deterministic local treatment instead of reopening visual exploration.
+- Record approval evidence and separate locked principles from flexible details in `design.approval`. A local readability correction is not automatically a new direction; a change to a locked principle requires renewed confirmation.
+- Count rejected directions in `conceptRevision`, bounded by `design.exploration.directionBudget`. Count actual image calls separately in `provider`. Diagnose repeated rejection; do not impose a universal one-revision limit or generate indefinitely.
 - Use authorized original assets for real identities, product/package details, logos, and QR codes wherever the asset policy requires fidelity.
 - Report the actual stage and named blocker when a required check is absent or fails.
 
 ## Verification Truth
 
-Inspect the rendered artifact, not merely a successful tool response. At the applicable stage, verify decoded dimensions, non-empty output, exact approved text and facts, authorized identity and brand treatment, QR payload when present, artifacts/clipping, and phone-scale readability. Release evidence becomes stale after a render or source change.
+Inspect the rendered artifact, not merely a successful tool response. Verify dimensions, content, authentic assets, QR payloads, and artifacts at the applicable stage. Use phone previews for phone delivery, representative crops for feeds, and physical-size/distance checks for print. Release retains target and mobile evidence; a mobile check does not prove print readability. Report the actual stage and unverified checks. Release evidence becomes stale after a render or source change.

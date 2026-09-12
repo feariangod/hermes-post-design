@@ -81,3 +81,38 @@ test('portable destination checks reject an injected Windows reparse-like redire
     /redirect|reparse|project/i,
   );
 });
+
+test('project file publication replaces through one atomic rename without deleting the destination', async (context) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'poster-atomic-publish-'));
+  context.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const fsPromises = await import('node:fs/promises');
+  const projectRoot = await fsPromises.realpath(temporaryRoot);
+  const target = path.join(projectRoot, 'result.json');
+  await writeFile(target, 'before\n');
+
+  const safetyUrl = `${pathToFileURL(path.join(skillRoot, 'scripts/path-safety.mjs')).href}?atomic=${Date.now()}`;
+  const { publishProjectFile } = await import(safetyUrl);
+  const operations = [];
+  const instrumentedFs = {
+    ...fsPromises,
+    async rename(source, destination) {
+      operations.push({ operation: 'rename', source, destination });
+      return fsPromises.rename(source, destination);
+    },
+    async rm(candidate, options) {
+      operations.push({ operation: 'rm', candidate });
+      return fsPromises.rm(candidate, options);
+    },
+  };
+
+  await publishProjectFile(
+    projectRoot,
+    target,
+    (temporary) => writeFile(temporary, 'after\n'),
+    { fs: instrumentedFs, randomUUID: () => 'atomic-test' },
+  );
+
+  assert.equal(await readFile(target, 'utf8'), 'after\n');
+  assert.equal(operations.filter(({ operation }) => operation === 'rename').length, 1);
+  assert.equal(operations.some(({ operation, candidate }) => operation === 'rm' && candidate === target), false);
+});

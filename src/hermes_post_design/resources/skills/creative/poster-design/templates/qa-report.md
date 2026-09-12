@@ -41,6 +41,10 @@
 
 ## Visual Review
 
+- Declared viewing contexts and actual artifacts reviewed:
+- First-glance takeaway and next action:
+- Physical-size/distance or platform-crop review when applicable:
+- Approval scope respected and evidence:
 - Hierarchy:
 - Composition:
 - Typography:
@@ -52,7 +56,9 @@
 
 ## Findings and Revisions
 
-| Round | Finding | Severity | Change | Verification |
+Prioritize one to three high-impact visual findings; record every hard blocker separately.
+
+| Round | Location and observed problem | Impact | Scoped fix | Verification |
 |---|---|---|---|---|
 
 ## Blocking Findings

@@ -1,5 +1,5 @@
-import { lstat, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
+import { lstat, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
@@ -7,6 +7,7 @@ import jsQR from 'jsqr';
 import { PDFDocument } from 'pdf-lib';
 import { PNG } from 'pngjs';
 import { resolveExecutable } from './browser-paths.mjs';
+import { publishProjectFile } from './path-safety.mjs';
 import { collectProjectSourceHashes, derivePublishQaApplicability, installProjectResourceBoundary, validateAssetManifest, validateBrief, validateConfig, validateFontManifest, validatePosterState, validatePublishQa, validateRenderedGlyphCoverage, validateStaticHtml } from './poster-contract.mjs';
 
 function parseArgs(argv) {
@@ -425,7 +426,7 @@ async function writeStartupFailure(reportPath, project, strict, finalRequested, 
     release: { finalRequested, finalEligible: false },
     evidence: { viewport: null, dom: null, facts: [], qrCodes: [], fonts: null, outputs: null },
   };
-  await writeReport(reportPath, report);
+  await writeReport(project, reportPath, report);
 }
 
 function runtimeFailure(stage, error) {
@@ -447,15 +448,10 @@ function runtimeFailure(stage, error) {
   });
 }
 
-async function writeReport(reportPath, report) {
-  const temporaryPath = path.join(path.dirname(reportPath), `.qa-report.${randomUUID()}.tmp.json`);
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(report, null, 2)}\n`);
-    await rm(reportPath, { force: true });
-    await rename(temporaryPath, reportPath);
-  } finally {
-    await rm(temporaryPath, { force: true });
-  }
+async function writeReport(project, reportPath, report) {
+  await publishProjectFile(project, reportPath, (temporaryPath) => (
+    writeFile(temporaryPath, `${JSON.stringify(report, null, 2)}\n`)
+  ));
 }
 
 async function main() {
@@ -625,17 +621,20 @@ async function main() {
           && box.left < (poster?.getBoundingClientRect().right ?? window.innerWidth)
           && box.top < (poster?.getBoundingClientRect().bottom ?? document.documentElement.scrollHeight);
       };
-      const textRuns = nodes.flatMap((element) => {
-        const text = element.children.length === 0 ? element.textContent?.trim() ?? '' : '';
-        if (!text || !visibility(element)) return [];
-        return [{
+      const textRuns = [];
+      const textWalker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let textNode = textWalker.nextNode(); textNode; textNode = textWalker.nextNode()) {
+        const element = textNode.parentElement;
+        const text = textNode.nodeValue?.trim() ?? '';
+        if (!element || !text || ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(element.tagName) || !visibility(element)) continue;
+        textRuns.push({
           tag: element.tagName,
           text: text.normalize('NFC'),
           fontFamily: getComputedStyle(element).fontFamily,
           copyBound: Boolean(element.closest('[data-copy]')),
           factBound: Boolean(element.closest('[data-fact]')),
-        }];
-      });
+        });
+      }
       const copyBindings = [...document.querySelectorAll('[data-copy]')].map((element) => ({
         tag: element.tagName,
         text: (element.innerText ?? element.textContent ?? '').trim().normalize('NFC'),
@@ -859,7 +858,7 @@ async function main() {
         visualReview: visualReviewEvidence,
       },
     };
-    await writeReport(reportPath, report);
+    await writeReport(project, reportPath, report);
     process.stdout.write(`${JSON.stringify({ status: report.status, blockers: blockers.length, warnings: warnings.length })}\n`);
     if (strict && blockers.length) process.exitCode = 1;
   } catch (error) {

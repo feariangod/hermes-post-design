@@ -2,36 +2,39 @@
 
 This Skill names outcomes, not provider APIs. Inspect the current host's available capabilities and use only a compatible route that the host can perform locally and safely.
 
-## Capability Selection
+## Production Before Capability
 
-Use this order without skipping a branch:
+Choose production from the design agreement first:
 
 ```text
-authorized compatible image tool -> image-led concept
-available but billed/external and not authorized -> request authorization once
-declined, missing, or incompatible image tool -> deterministic local concept
-ambiguous network failure -> stop; do not retry without fresh authorization
+design needs -> image-led / layered / deterministic production
+generation needed -> compatible capability + authorization + remaining call budget
+generation unnecessary -> local composition even when an image tool is available
+generation unavailable or declined -> adapt to authorized local assets and composition
+ambiguous external failure -> stop and reconcile before any repeat or failover
 ```
 
-An image tool is compatible only when it can produce or edit the requested visual at the required size and accepts the assets needed by the brief. Do not infer compatibility from its name, a prior host, or an undocumented option.
+For layered production, map generation only to the layers that benefit from it. Retain original identity assets and compose editable copy locally. `design.route` records production intent; `provider` records the actual image-call capability and budget, or `deterministic-local` when no image calls are used. These are separate decisions.
+
+An image tool is compatible only when it can produce the required layer or visual and accepts the required inputs. Final poster dimensions may be reached by deterministic composition; verify the decoded final size. Do not infer compatibility from a tool name, a prior host, or an undocumented option.
 
 ## Authorization Boundary
 
-Before a billed or external call, state the selected capability, that the call may be billed or leave the local environment, and the immediate output it will produce. Ask once for explicit authorization. A visual approval, a request for a poster, or an earlier authorization for a different call is not authorization for this call.
+Before a billed or external call, establish explicit authorization covering the selected capability, external/billing implications, outputs, and bounded number of calls. Check whether the user's existing authorization already covers this operation and remaining budget. Do not ask again for each call within that same scope. A visual approval, generic request for a poster, or authorization for a different operation is not enough. Ask once for missing authorization; a direction-revision budget never grants call authorization.
 
-If authorization is declined, unavailable, or no compatible image capability exists, continue with the deterministic local route. Do not keep asking after a decline unless the user changes the request or offers a new authorization.
+If authorization is declined or no compatible image capability exists, continue with the deterministic local route and authorized assets. Disclose any material design compromise. Do not keep asking after a decline unless the user changes the request or offers new authorization. If authorization is merely missing, request it once or proceed locally without making the call.
 
-If a network failure is ambiguous, preserve the current artifacts and stop. Do not retry, fail over to another external capability, or make a billed call until fresh authorization is received.
+Count every attempted call, including studies, refinements, and ambiguous failures. If a network failure is ambiguous, preserve artifacts and stop; reconcile whether the operation completed or was billed. Do not retry or fail over automatically. A possibly duplicate operation requires explicit user authorization that acknowledges that uncertainty; routine remaining budget alone does not resolve it.
 
 ## Deterministic Local Route
 
-The deterministic local route is a complete delivery route, not a placeholder. Compose the poster from local or user-authorized assets, deterministic typography, shapes, gradients, and local rendering tools. Keep critical facts, identity assets, logos, and QR codes deterministic; render and inspect the same Concept, Publish, and Release gates required by the main Skill.
+The deterministic local route is a complete delivery route and often the first choice for information-heavy work. Compose from authorized local assets, typography, and purposeful graphic elements. Keep critical facts, identity assets, logos, and QR codes deterministic; apply the same Concept, Publish, and Release gates.
 
-When the route changes, record the chosen route and reason with the project state so a resumed session does not silently switch capabilities.
+When production or capability changes, record the reason in project state. Do not discard an accepted design because a new host offers a different tool. Without compositing/rendering or visual-review capability, hand off the project and name the missing check; do not claim to have delivered or inspected an image.
 
 ## Codex adapter
 
-Map the capability seam to an available **Codex image generation capability** only after checking whether the operation is external or billed and whether the current request already authorizes that call. Pass the brief, exact dimensions, approved assets, and edit/generation intent through the capability; do not expose provider-only flags in the core workflow. Use Codex visual inspection capabilities for target and phone-scale review when available. When image generation or visual inspection is unavailable, use the deterministic local route and record a manual visual-review result without inventing tool evidence.
+Map required generation to an available **Codex image generation capability** only after checking external/billing behavior and whether existing authorization covers the operation. Pass the layer brief, dimensions, approved assets, and edit/generation intent through the capability; do not expose provider-only flags in the core workflow. Use visual inspection capabilities for the relevant rendered artifacts. Missing image generation can use local composition; missing visual inspection requires an actual human review or an explicitly unverified handoff, never an invented manual-review result.
 
 ## Hermes adapter
 

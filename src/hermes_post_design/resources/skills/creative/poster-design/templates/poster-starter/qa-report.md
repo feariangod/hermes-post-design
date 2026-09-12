@@ -19,6 +19,9 @@
 ## Stage Contract Evidence
 
 - `poster.json` mode and state:
+- Design route and reason:
+- Approval evidence, locked principles, and flexible details:
+- Direction revisions and budget:
 - Provider authorization budget and usage:
 - `publish-qa.json` status:
 - Font manifest paths, hashes, families, samples, and licenses:
@@ -49,6 +52,9 @@
 
 ## Visual Review
 
+- Declared viewing contexts and actual artifacts reviewed:
+- First-glance takeaway and next action:
+- Physical-size/distance or platform-crop review when applicable:
 - Hierarchy:
 - Composition:
 - Typography:
@@ -60,7 +66,9 @@
 
 ## Findings And Revisions
 
-| Round | Finding | Severity | Change | Verification |
+Prioritize one to three high-impact visual findings; record every hard blocker separately.
+
+| Round | Location and observed problem | Impact | Scoped fix | Verification |
 |---|---|---|---|---|
 
 ## Blocking Findings

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { resolveExecutable } from './browser-paths.mjs';
+import { publishProjectFile } from './path-safety.mjs';
 import { collectProjectSourceHashes, installProjectResourceBoundary, validateConfig, validateMeasuredCanvas, validateStaticHtml } from './poster-contract.mjs';
 
 function parseArgs(argv) {
@@ -92,9 +93,8 @@ function temporaryOutputPath(project, outputPath) {
   return path.join(project, `.${stem}.${randomUUID()}.tmp${extension}`);
 }
 
-async function publishOutput(temporaryPath, outputPath) {
-  await rm(outputPath, { force: true });
-  await rename(temporaryPath, outputPath);
+async function publishOutput(project, temporaryPath, outputPath) {
+  await publishProjectFile(project, outputPath, (publicationPath) => rename(temporaryPath, publicationPath));
 }
 
 async function sha256(filePath) {
@@ -226,11 +226,11 @@ async function main() {
         [path.basename(pdfPath)]: await sha256(temporaryPaths.pdf),
       },
     };
-    await publishOutput(temporaryPaths.png, pngPath);
-    await publishOutput(temporaryPaths.mobile, mobilePath);
-    await publishOutput(temporaryPaths.pdf, pdfPath);
+    await publishOutput(project, temporaryPaths.png, pngPath);
+    await publishOutput(project, temporaryPaths.mobile, mobilePath);
+    await publishOutput(project, temporaryPaths.pdf, pdfPath);
     await writeFile(temporaryPaths.result, `${JSON.stringify(result, null, 2)}\n`);
-    await publishOutput(temporaryPaths.result, resultPath);
+    await publishOutput(project, temporaryPaths.result, resultPath);
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally {
     await browser.close();

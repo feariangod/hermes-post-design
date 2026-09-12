@@ -107,20 +107,6 @@ def test_entrypoint_does_not_unconditionally_call_an_image_tool(skill_root):
     )
 
 
-def test_host_adapter_requires_authorization_and_fallback(skill_root):
-    adapter = (skill_root / "references/host-adapters.md").read_text(encoding="utf-8")
-    assert """authorized compatible image tool -> image-led concept
-available but billed/external and not authorized -> request authorization once
-declined, missing, or incompatible image tool -> deterministic local concept
-ambiguous network failure -> stop; do not retry without fresh authorization""" in adapter
-    assert "Ask once for explicit authorization." in adapter
-    assert (
-        "If authorization is declined, unavailable, or no compatible image capability "
-        "exists, continue with the deterministic local route."
-    ) in adapter
-    assert "Do not retry, fail over to another external capability" in adapter
-
-
 def test_host_adapter_maps_each_supported_and_unknown_host(skill_root):
     adapter = (skill_root / "references/host-adapters.md").read_text(encoding="utf-8")
     for heading in (

@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { copyFile, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, lstat, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import * as fontkit from 'fontkit';
+import { loadFontConfig, customLicensePolicy } from './font-policy.mjs';
 import { assertSafeDestinationPath, ensureSafeDirectory, publishProjectFile, resolveProjectRoot } from './path-safety.mjs';
 
 const FONT_PACKAGES = [
@@ -92,18 +93,19 @@ function explicitSample(buffer) {
   return String.fromCodePoint(codePoint);
 }
 
-function fontCss(fonts) {
+function fontCss(fonts, roles) {
   const blocks = fonts.map((font) => [
     '@font-face {',
     `  font-family: "${font.family}";`,
-    `  src: url("${font.file}") format("woff2");`,
+    `  src: url("${font.file}") format("${({ '.ttf': 'truetype', '.otf': 'opentype', '.woff': 'woff' })[path.extname(font.file).toLowerCase()] ?? 'woff2'}");`,
     `  font-style: ${font.style};`,
     `  font-weight: ${font.weight};`,
     '  font-display: block;',
     `  unicode-range: ${font.unicodeRange};`,
     '}',
   ].join('\n'));
-  return `/* Generated from pinned Fontsource packages by npm run prepare. */\n\n${blocks.join('\n\n')}\n`;
+  const roleCss = roles ? `\n:root {\n${Object.entries(roles).map(([role, family]) => `  --font-${role}: "${family}";`).join('\n')}\n}\n` : '';
+  return `/* Generated from selected project fonts by npm run prepare. */\n\n${blocks.join('\n\n')}\n${roleCss}`;
 }
 
 function licenseRecords(fonts) {
@@ -113,7 +115,7 @@ function licenseRecords(fonts) {
     sha256: font.sha256,
     licenseFile: font.licenseFile,
     licenseSha256: font.licenseSha256,
-    ...LICENSE,
+    ...(font.license ?? LICENSE),
     sourcePackage: font.package,
   }));
 }
@@ -125,7 +127,7 @@ function licensesMarkdown(fonts) {
     '',
     `- Package: \`${font.package}\``,
     `- Bundled WOFF2 shards: ${fonts.filter((entry) => entry.family === font.family).length}`,
-    `- License: ${LICENSE.licenseName} ${LICENSE.licenseVersion} (\`${LICENSE.licenseId}\`)`,
+    `- License: ${(font.license ?? LICENSE).licenseName} ${(font.license ?? LICENSE).licenseVersion} (\`${(font.license ?? LICENSE).licenseId}\`)`,
     `- License file: \`${font.licenseFile}\``,
     `- License SHA-256: \`${font.licenseSha256}\``,
   ].join('\n'));
@@ -145,20 +147,45 @@ async function writeText(project, destination, value) {
   await publishProjectFile(project, destination, (temporary) => writeFile(temporary, value));
 }
 
+async function rejectCustomInputCollisions(project, customFonts, destinations) {
+  const inputs = new Set(customFonts.flatMap((font) => [font.file, font.licenseFile, font.authorization.evidenceFile]));
+  const identities = [];
+  for (const input of inputs) {
+    const file = path.join(project, input);
+    const stats = await lstat(file, { bigint: true });
+    identities.push({ input, resolved: await realpath(file), dev: stats.dev, ino: stats.ino });
+  }
+  for (const destination of destinations) {
+    let stats;
+    let resolved = path.resolve(destination);
+    try {
+      stats = await lstat(destination, { bigint: true });
+      resolved = await realpath(destination);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    const collision = identities.find((input) => input.resolved === resolved
+      || (stats && input.dev === stats.dev && input.ino === stats.ino));
+    if (collision) throw new Error(`Custom font input collides with prepare output: ${collision.input} -> ${relativePath(path.relative(project, destination))}`);
+  }
+}
+
 async function main() {
   const parsed = parseArgs(process.argv.slice(2));
   const project = await resolveProjectRoot(parsed.project);
+  const config = await loadFontConfig(project);
+  const selectedPackages = FONT_PACKAGES.filter((spec) => config.families.includes(spec.family));
   const fontsDirectory = path.join(project, 'assets', 'fonts');
   const licensesDirectory = path.join(project, 'assets', 'licenses');
 
   const specs = [];
-  for (const fontPackage of FONT_PACKAGES) {
+  for (const fontPackage of selectedPackages) {
     const css = await readFile(path.join(project, 'node_modules', fontPackage.cssSource), 'utf8');
     specs.push(...parsePinnedFaces(css, fontPackage));
   }
   const destinations = [
     ...specs.map((spec) => path.join(project, spec.file)),
-    ...FONT_PACKAGES.map((spec) => path.join(project, spec.licenseFile)),
+    ...selectedPackages.map((spec) => path.join(project, spec.licenseFile)),
     path.join(project, 'font-faces.css'),
     path.join(project, 'font-manifest.json'),
     path.join(fontsDirectory, 'font-manifest.json'),
@@ -169,6 +196,7 @@ async function main() {
   for (const destination of destinations) {
     await assertSafeDestinationPath(project, destination);
   }
+  await rejectCustomInputCollisions(project, config.customFonts, destinations);
   await ensureSafeDirectory(project, fontsDirectory);
   await ensureSafeDirectory(project, licensesDirectory);
 
@@ -203,12 +231,26 @@ async function main() {
     });
   }
 
-  const manifestFonts = fonts.map(({ package: _package, licenseSha256: _licenseSha256, style: _style, weight: _weight, ...font }) => font);
-  const manifest = { version: 2, fonts: manifestFonts };
+  for (const custom of config.customFonts) {
+    const buffer = await readFile(path.join(project, custom.file));
+    const policy = customLicensePolicy(custom);
+    const parsedFont = fontkit.create(buffer);
+    const weight = parsedFont.variationAxes?.wght;
+    fonts.push({ family: custom.family, file: custom.file, sha256: custom.sha256,
+      licenseFile: custom.licenseFile, licenseSha256: custom.licenseSha256,
+      package: policy.sourcePackage,
+      license: { licenseId: policy.licenseId, licenseName: policy.licenseName, licenseVersion: policy.licenseVersion },
+      unicodeRange: 'U+0-10FFFF', samples: [explicitSample(buffer)],
+      style: /italic|oblique/i.test(parsedFont.subfamilyName ?? '') ? 'italic' : 'normal',
+      weight: weight ? `${weight.min} ${weight.max}` : String(parsedFont['OS/2']?.usWeightClass ?? 400),
+    });
+  }
+  const manifestFonts = fonts.map(({ package: _package, license: _license, licenseSha256: _licenseSha256, style: _style, weight: _weight, ...font }) => font);
+  const manifest = { version: 2, ...(config.roles ? { roles: config.roles } : {}), fonts: manifestFonts };
   const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
   const licenseManifest = { version: 1, records: licenseRecords(fonts) };
   const licenseManifestText = `${JSON.stringify(licenseManifest, null, 2)}\n`;
-  await writeText(project, path.join(project, 'font-faces.css'), fontCss(fonts));
+  await writeText(project, path.join(project, 'font-faces.css'), fontCss(fonts, config.roles));
   await writeText(project, path.join(fontsDirectory, 'font-manifest.json'), manifestText);
   await writeText(project, path.join(project, 'font-manifest.json'), manifestText);
   await writeText(project, path.join(licensesDirectory, 'font-license-manifest.json'), licenseManifestText);

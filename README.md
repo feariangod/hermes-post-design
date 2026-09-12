@@ -7,7 +7,7 @@ This repository provides a portable `poster-design` Agent Skill, a deterministic
 - Python `3.11` to `3.13` for the installer and optional Chiyi client.
 - Node.js `22` for the poster project runtime and automated tests.
 - Four installer targets: `agents`, `codex`, `claude`, and `hermes`.
-- Deterministic local poster concepts are the fallback on every host.
+- Image-led, layered, and deterministic production are chosen by design needs; deterministic local production also provides a fallback on every host.
 - External or billed image capabilities are optional host adapters and require authorization for each bounded call budget.
 - Hermes remains the only target that also installs the optional `chiyi-image-generation` Skill and Chiyi plugin.
 
@@ -85,20 +85,25 @@ Apply creates a timestamped backup under `<host-home>/backups/hermes-post-design
 hermes-post-design restore --hermes-home "$HERMES_HOME" --backup "$HERMES_HOME/backups/hermes-post-design/<timestamp>"
 ```
 
-## Select A Host Adapter
+## Creative Workflow
 
-Before creating a concept, read the installed Skill's `references/host-adapters.md` and inspect the capabilities actually available in the current host. Use this order:
+Start with the audience, first-glance message, action, information hierarchy, and brand constraints. Record this design agreement in `poster.json.design`, plan original/editable/generated layers, then choose production:
 
 ```text
-authorized compatible image tool -> image-led concept
-available but billed/external and not authorized -> request authorization once
-declined, missing, or incompatible image tool -> deterministic local concept
-ambiguous network failure -> stop; do not retry without fresh authorization
+emotional key visual + sparse copy -> image-led
+authentic product/logo/person + visual environment -> layered
+dense or frequently revised information -> deterministic
+unclear composition -> optional inexpensive studies -> one selected Concept
+confirmed Concept -> scoped refinement -> Publish / requested Release
 ```
 
-The deterministic local route is a complete fallback. It uses project-local HTML, CSS, fonts, shapes, gradients, and authorized local assets, then runs the same Concept, Publish, and Release gates as an image-led route.
+Use a known direction directly. Studies compare composition without fabricating unresolved facts. Confirmation records locked principles and flexible details so readability improvements do not automatically reopen the direction. Direction revisions and authorized image calls have separate budgets. Fonts are selected by heading/body/numeral role, with evidenced project-local custom fonts supported.
 
-Before any billed or external image call, name the selected capability, state that the call may be billed or leave the local environment, describe the immediate artifact, and obtain explicit authorization. Authorization for a poster, a visual direction, or an earlier call does not authorize another billed or external call.
+## Select A Host Adapter
+
+After choosing production, read the installed Skill's `references/host-adapters.md` and inspect available capabilities. Generate only the layers that benefit from it; an available image tool does not override an information-led design. The deterministic local route uses project-local HTML, CSS, fonts, and authorized assets, with the same applicable delivery gates.
+
+Before any billed or external image call, establish explicit authorization for the capability, external/billing implications, outputs, and bounded call budget. Honor an existing authorization covering the same operation and remaining budget without asking repeatedly. Visual approval alone is not call authorization. Count all attempts; after an ambiguous failure, stop and reconcile before any duplicate attempt or failover, with explicit approval acknowledging the uncertainty.
 
 Credentials must stay outside the repository. Keep provider keys in the host's secret store or process environment, never in project JSON, logs, errors, command arguments, committed `.env` files, or generated evidence.
 
@@ -118,9 +123,9 @@ npm ci
 npm run prepare
 ```
 
-`npm ci` belongs inside each initialized project. It materializes pinned Fontsource packages, Playwright, and inspection dependencies without relying on the source checkout. `npm run prepare` then copies the complete pinned WOFF2 shard sets, their `unicode-range` declarations, and license files into the project. Rendering and inspection make no network calls.
+`npm ci` belongs inside each initialized project. It materializes pinned Fontsource packages, Playwright, and inspection dependencies without relying on the source checkout. `font-config.json` chooses heading, body, and numeral families; the starter uses only Noto Sans SC. `npm run prepare` copies selected bundled families' complete WOFF2 shards and licenses, or validates evidenced project-local custom fonts. Projects without this config retain the legacy three-family set. Rendering and inspection make no network calls.
 
-The project starts in `intake` with provider `deterministic-local`, `external=false`, `billed=false`, and zero authorized or used calls. `poster.json` is the sole workflow-stage and approved-copy authority. `brief.json` owns facts and QR destinations; every visible Release string must use `data-copy` or `data-fact`. Record every non-font file below `assets/` in `asset-manifest.json`; the starter's empty manifest is valid when no external assets are used. Update `poster.html`, `styles.css`, and those contracts as the work advances. Then render and inspect:
+The project starts in `intake` with provider `deterministic-local`, `external=false`, `billed=false`, and zero authorized or used calls. `poster.json` owns workflow stage, approved copy, and the design agreement. `brief.json` owns facts and QR destinations; `poster.config.json` owns canvas dimensions. Every visible Release string must use `data-copy` or `data-fact`. Record every non-font file below `assets/` in `asset-manifest.json`; the starter's empty manifest is valid when no external assets are used. Update `poster.html`, `styles.css`, and those contracts as the work advances. Then render and inspect:
 
 ```bash
 npm run render
@@ -161,12 +166,13 @@ Agents / Codex / Claude / Hermes
               v
      portable poster-design Skill
               |
-      host-adapters.md routing
-        /                 \
-       v                   v
-deterministic local    authorized image adapter
-       \                   /
-        +--------+---------+
+     design agreement + layer plan
+                 |
+      production choice + host adapter
+       /          |           \
+image-led      layered     deterministic
+       \          |           /
+        +---------+----------+
                  v
        project-local runtime
  init -> prepare -> render -> inspect -> evidence
