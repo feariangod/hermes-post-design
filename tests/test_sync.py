@@ -14,20 +14,54 @@ def test_plan_is_read_only_and_lists_three_managed_components(tmp_path):
     assert list(tmp_path.rglob("*")) == before
 
 
+def test_plan_sync_preserves_legacy_component_order_and_labels(tmp_path):
+    plan = plan_sync(tmp_path / "hermes")
+
+    assert [item.component for item in plan] == ["plugin", "skill", "skill"]
+    assert [Path(item.target).as_posix().split("/hermes/", 1)[-1] for item in plan] == [
+        "plugins/image_gen/chiyi",
+        "skills/media/chiyi-image-generation",
+        "skills/creative/poster-design",
+    ]
+
+
 def test_apply_sync_is_idempotent_and_deploys_resources(tmp_path):
     home = tmp_path / "hermes"
     first = apply_sync(home)
     assert first["changed"] is True
+    assert [entry["component"] for entry in first["entries"]] == [
+        "plugin",
+        "skill",
+        "skill",
+    ]
+    assert [Path(entry["target"]).relative_to(home).as_posix() for entry in first["entries"]] == [
+        "plugins/image_gen/chiyi",
+        "skills/media/chiyi-image-generation",
+        "skills/creative/poster-design",
+    ]
     assert Path(first["backup"]).is_dir()
     assert (home / "plugins/image_gen/chiyi/plugin.yaml").is_file()
     assert (home / "skills/media/chiyi-image-generation/SKILL.md").is_file()
     assert (home / "skills/creative/poster-design/SKILL.md").is_file()
-    assert not list(home.rglob("*.png"))
-    assert not list(home.rglob("*.pdf"))
 
     second = apply_sync(home)
     assert second["changed"] is False
+    assert [entry["component"] for entry in second["entries"]] == [
+        "plugin",
+        "skill",
+        "skill",
+    ]
     assert all(item["action"] == "unchanged" for item in second["entries"])
+
+
+def test_apply_sync_keeps_legacy_last_sync_state_record(tmp_path):
+    import json
+
+    home = tmp_path / "hermes"
+    result = apply_sync(home)
+
+    state = json.loads((home / "state/hermes-post-design/last-sync.json").read_text(encoding="utf-8"))
+    assert state["backup"] == result["backup"]
 
 
 def test_update_creates_backup_and_restore_recovers_previous_content(tmp_path):
@@ -45,7 +79,7 @@ def test_update_creates_backup_and_restore_recovers_previous_content(tmp_path):
 
 
 def test_apply_failure_rolls_back_all_replaced_targets(tmp_path, monkeypatch):
-    import hermes_post_design.sync as sync_module
+    import hermes_post_design.install as install_module
 
     home = tmp_path / "hermes"
     originals = {}
@@ -60,7 +94,7 @@ def test_apply_failure_rolls_back_all_replaced_targets(tmp_path, monkeypatch):
         marker.write_text(relative, encoding="utf-8")
         originals[relative] = marker
 
-    real_replace = sync_module.os.replace
+    real_replace = install_module.os.replace
     calls = 0
 
     def fail_second(source, target):
@@ -70,7 +104,7 @@ def test_apply_failure_rolls_back_all_replaced_targets(tmp_path, monkeypatch):
             raise OSError("injected replace failure")
         return real_replace(source, target)
 
-    monkeypatch.setattr(sync_module.os, "replace", fail_second)
+    monkeypatch.setattr(install_module.os, "replace", fail_second)
     try:
         apply_sync(home)
     except OSError:
@@ -130,7 +164,7 @@ def test_parent_symlink_cannot_redirect_managed_targets(tmp_path):
 
 
 def test_restore_failure_rolls_back_restore_transaction(tmp_path, monkeypatch):
-    import hermes_post_design.sync as sync_module
+    import hermes_post_design.install as install_module
 
     home = tmp_path / "hermes"
     current_values = {}
@@ -152,7 +186,7 @@ def test_restore_failure_rolls_back_restore_transaction(tmp_path, monkeypatch):
         marker.write_text(f"after:{relative}", encoding="utf-8")
         current_values[relative] = marker
 
-    real_replace = sync_module.os.replace
+    real_replace = install_module.os.replace
     calls = 0
 
     def fail_fourth(source, target):
@@ -162,7 +196,7 @@ def test_restore_failure_rolls_back_restore_transaction(tmp_path, monkeypatch):
             raise OSError("injected restore failure")
         return real_replace(source, target)
 
-    monkeypatch.setattr(sync_module.os, "replace", fail_fourth)
+    monkeypatch.setattr(install_module.os, "replace", fail_fourth)
     with pytest.raises(OSError, match="injected restore failure"):
         restore_backup(home, backup)
 

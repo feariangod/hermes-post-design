@@ -1,4 +1,4 @@
-"""Command-line interface for Chiyi image generation and Hermes resource sync."""
+"""Command-line interface for portable Skill installs and optional Chiyi images."""
 from __future__ import annotations
 
 import argparse
@@ -11,7 +11,17 @@ import requests
 
 from hermes_post_design.chiyi_core import ChiyiClient
 from hermes_post_design.chiyi_core.models import EditRequest, GenerateRequest, ImageSource
+from hermes_post_design.install import apply_install, plan_install
 from hermes_post_design.sync import apply_sync, plan_sync, restore_backup
+
+
+class CliArgumentError(ValueError):
+    """Raised instead of allowing argparse to terminate before JSON handling."""
+
+
+class CliArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise CliArgumentError(message)
 
 
 def _result_payload(result) -> dict:
@@ -121,6 +131,27 @@ def _command_sync(args) -> int:
     return 0
 
 
+def _command_install_skill(args) -> int:
+    payload = apply_install(args.target, args.home) if args.apply else {
+        "changed": False,
+        "dry_run": True,
+        "entries": [entry.__dict__ for entry in plan_install(args.target, args.home)],
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        return 0
+    if payload.get("dry_run"):
+        print("Dry run: no changes applied.")
+    elif payload.get("changed"):
+        print("Installed poster skill.")
+        print(f"Backup: {payload['backup']}")
+    else:
+        print("Poster skill is already up to date.")
+    for entry in payload["entries"]:
+        print(f"{entry['action']}: {entry['component']} -> {entry['target']}")
+    return 0
+
+
 def _command_restore(args) -> int:
     payload = restore_backup(args.hermes_home, args.backup)
     print(json.dumps(payload, ensure_ascii=False, indent=2 if not args.json else None, sort_keys=True))
@@ -128,7 +159,7 @@ def _command_restore(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="hermes-post-design")
+    parser = CliArgumentParser(prog="hermes-post-design")
     sub = parser.add_subparsers(dest="command", required=True)
 
     generate = sub.add_parser("generate", help="Generate one image with Chiyi")
@@ -158,6 +189,13 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--json", action="store_true")
     sync.set_defaults(handler=_command_sync)
 
+    install_skill = sub.add_parser("install-skill", help="Preview or install the poster skill for one host")
+    install_skill.add_argument("--target", choices=("agents", "codex", "claude", "hermes"), required=True)
+    install_skill.add_argument("--home", type=Path)
+    install_skill.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run")
+    install_skill.add_argument("--json", action="store_true")
+    install_skill.set_defaults(handler=_command_install_skill)
+
     restore = sub.add_parser("restore", help="Restore a backup created by sync")
     restore.add_argument("--hermes-home", type=Path, required=True)
     restore.add_argument("--backup", type=Path, required=True)
@@ -167,11 +205,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
-    args = build_parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    as_json = "--json" in arguments
     try:
+        args = build_parser().parse_args(arguments)
         return args.handler(args)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+    except CliArgumentError as exc:
+        payload = {"success": False, "error": {"type": "argument_error", "message": str(exc)}}
+        if as_json:
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        payload = {"success": False, "error": {"type": "operation_error", "message": str(exc)}}
+        if as_json:
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
         return 2
 
 

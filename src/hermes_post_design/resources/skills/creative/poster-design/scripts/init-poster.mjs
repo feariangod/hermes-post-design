@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(scriptDir, '..');
 const starterDir = path.join(skillRoot, 'templates', 'poster-starter');
-const runtimeNames = ['poster-contract.mjs', 'render-poster.mjs', 'inspect-poster.mjs', 'record-visual-review.mjs'];
+const runtimeNames = ['browser-paths.mjs', 'path-safety.mjs', 'design-contract.mjs', 'font-policy.mjs', 'poster-contract.mjs', 'prepare-project.mjs', 'render-poster.mjs', 'inspect-poster.mjs', 'record-visual-review.mjs'];
 
 function parseArgs(argv) {
   const values = {};

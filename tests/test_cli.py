@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from hermes_post_design import cli
 
 
@@ -27,6 +29,37 @@ def test_sync_defaults_to_dry_run_and_apply_writes(tmp_path, capsys):
     assert (home / "plugins/image_gen/chiyi/provider.py").is_file()
 
 
+def test_install_skill_defaults_to_dry_run_and_applies_only_selected_target(tmp_path, capsys):
+    home = tmp_path / "codex"
+
+    assert cli.main(["install-skill", "--target", "codex", "--home", str(home), "--json"]) == 0
+    dry = json.loads(capsys.readouterr().out)
+    assert dry["dry_run"] is True
+    assert not home.exists()
+
+    assert cli.main(["install-skill", "--target", "codex", "--home", str(home), "--apply", "--json"]) == 0
+    applied = json.loads(capsys.readouterr().out)
+    assert applied["changed"] is True
+    assert (home / "skills/poster-design/SKILL.md").is_file()
+    assert not (home / "plugins").exists()
+
+
+def test_install_skill_uses_human_readable_output_without_json_flag(tmp_path, capsys):
+    home = tmp_path / "codex"
+
+    assert cli.main(["install-skill", "--target", "codex", "--home", str(home)]) == 0
+    dry_output = capsys.readouterr().out
+    assert "Dry run" in dry_output
+    assert not dry_output.lstrip().startswith("{")
+    assert not home.exists()
+
+    assert cli.main(["install-skill", "--target", "codex", "--home", str(home), "--apply"]) == 0
+    applied_output = capsys.readouterr().out
+    assert "Installed poster skill" in applied_output
+    assert "Backup:" in applied_output
+    assert not applied_output.lstrip().startswith("{")
+
+
 def test_generate_without_key_is_structured_and_does_not_echo_environment(monkeypatch, capsys, tmp_path):
     monkeypatch.delenv("CHIYI_IMAGE_API_KEY", raising=False)
     exit_code = cli.main(["generate", "poster", "--output-dir", str(tmp_path), "--json"])
@@ -45,3 +78,40 @@ def test_generate_maps_core_result(monkeypatch, capsys, tmp_path):
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert payload["artifact"]["path"].endswith("image.png")
+
+
+def test_json_argument_error_is_machine_readable_without_plain_stderr(capsys):
+    exit_code = cli.main(
+        ["install-skill", "--target", "unsupported", "--json"]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 2
+    assert payload["success"] is False
+    assert payload["error"]["type"] == "argument_error"
+    assert "unsupported" in payload["error"]["message"]
+    assert captured.err == ""
+
+
+@pytest.mark.parametrize("command", ["install-skill", "sync"])
+def test_json_runtime_error_is_machine_readable_without_plain_stderr(
+    tmp_path, capsys, command
+):
+    home = tmp_path / "not-a-directory"
+    home.write_text("file", encoding="utf-8")
+    argv = (
+        [command, "--target", "codex", "--home", str(home), "--json"]
+        if command == "install-skill"
+        else [command, "--hermes-home", str(home), "--json"]
+    )
+
+    exit_code = cli.main(argv)
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 2
+    assert payload["success"] is False
+    assert payload["error"]["type"] == "operation_error"
+    assert "directory" in payload["error"]["message"]
+    assert captured.err == ""

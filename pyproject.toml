@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-post-design"
 version = "0.1.0"
-description = "Chiyi image generation and poster workflow for Hermes Agent"
+description = "Portable poster workflow for Agent Skills hosts with an optional Chiyi adapter"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "feariangod"}]
@@ -21,6 +21,8 @@ hermes-post-design = "hermes_post_design.cli:main"
 [project.optional-dependencies]
 test = [
     "pytest>=8,<10",
+    "setuptools>=68",
+    "wheel",
 ]
 
 [tool.setuptools]
@@ -29,6 +31,66 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 hermes_post_design = ["resources/**/*"]
+
+[tool.setuptools.exclude-package-data]
+"*" = [
+    "resources/**/.agents/**",
+    "resources/**/.claude/**",
+    "resources/**/.codex/**",
+    "resources/**/.coverage",
+    "resources/**/.eggs/**",
+    "resources/**/.env",
+    "resources/**/.env.*",
+    "resources/**/.hermes/**",
+    "resources/**/.mypy_cache/**",
+    "resources/**/.npmrc",
+    "resources/**/.pypirc",
+    "resources/**/.pytest_cache/**",
+    "resources/**/.ruff_cache/**",
+    "resources/**/.venv/**",
+    "resources/**/__pycache__/**",
+    "resources/**/__pypackages__/**",
+    "resources/**/artifacts/**",
+    "resources/**/backups/**",
+    "resources/**/build/**",
+    "resources/**/cache/**",
+    "resources/**/coverage/**",
+    "resources/**/coverage.xml",
+    "resources/**/credentials/**",
+    "resources/**/credentials.json",
+    "resources/**/dist/**",
+    "resources/**/*.dist-info/**",
+    "resources/**/*.egg-info/**",
+    "resources/**/htmlcov/**",
+    "resources/**/logs/**",
+    "resources/**/node_modules/**",
+    "resources/**/reports/**",
+    "resources/**/secrets/**",
+    "resources/**/sessions/**",
+    "resources/**/state/**",
+    "resources/**/temp/**",
+    "resources/**/tmp/**",
+    "resources/**/venv/**",
+    "resources/**/auth.json",
+    "resources/**/config.yaml",
+    "resources/**/config.yml",
+    "resources/**/qa-report.json",
+    "resources/**/render-result.json",
+    "resources/**/visual-review.json",
+    "resources/**/*.avi",
+    "resources/**/*.db",
+    "resources/**/*.gif",
+    "resources/**/*.jpeg",
+    "resources/**/*.jpg",
+    "resources/**/*.log",
+    "resources/**/*.mov",
+    "resources/**/*.mp4",
+    "resources/**/*.pdf",
+    "resources/**/*.png",
+    "resources/**/*.sqlite*",
+    "resources/**/*.tmp",
+    "resources/**/*.webp",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

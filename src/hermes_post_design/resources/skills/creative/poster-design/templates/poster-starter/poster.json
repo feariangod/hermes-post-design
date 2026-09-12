@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "mode": "publish",
+  "state": "intake",
+  "conceptRevision": 0,
+  "direction": null,
+  "approvedCopy": [],
+  "design": {
+    "version": 1,
+    "objective": null,
+    "audience": null,
+    "viewingContext": null,
+    "firstGlance": null,
+    "action": null,
+    "informationDensity": "medium",
+    "hierarchy": [],
+    "brand": { "preserve": [], "avoid": [] },
+    "route": { "kind": null, "reason": null },
+    "exploration": { "approach": "direct", "maxStudies": 0, "directionBudget": 2 },
+    "layers": [],
+    "approval": {
+      "status": "pending",
+      "evidence": null,
+      "locked": [],
+      "flexible": ["type-size", "line-breaks", "spacing", "crop"]
+    },
+    "reviewContexts": [],
+    "deliverables": [],
+    "rebriefReason": null
+  },
+  "provider": {
+    "adapter": "deterministic-local",
+    "external": false,
+    "billed": false,
+    "authorizedCalls": 0,
+    "usedCalls": 0
+  }
+}

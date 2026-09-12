@@ -1,12 +1,14 @@
-import { access, lstat, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
+import { lstat, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import jsQR from 'jsqr';
 import { PDFDocument } from 'pdf-lib';
 import { PNG } from 'pngjs';
-import { collectProjectSourceHashes, installProjectResourceBoundary, isFinalStatus, validateBrief, validateConfig, validateStaticHtml } from './poster-contract.mjs';
+import { resolveExecutable } from './browser-paths.mjs';
+import { publishProjectFile } from './path-safety.mjs';
+import { collectProjectSourceHashes, derivePublishQaApplicability, installProjectResourceBoundary, validateAssetManifest, validateBrief, validateConfig, validateFontManifest, validatePosterState, validatePublishQa, validateRenderedGlyphCoverage, validateStaticHtml } from './poster-contract.mjs';
 
 function parseArgs(argv) {
   const flags = new Set();
@@ -25,36 +27,6 @@ function parseArgs(argv) {
     index += 1;
   }
   return { flags, values };
-}
-
-async function firstExisting(paths) {
-  for (const candidate of paths) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // Continue.
-    }
-  }
-  return null;
-}
-
-async function resolveExecutable(choice) {
-  if (choice && !['chrome', 'edge'].includes(choice)) {
-    const absolute = path.resolve(choice);
-    await access(absolute);
-    return absolute;
-  }
-  const chrome = [
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-    `${process.env.LOCALAPPDATA ?? ''}/Google/Chrome/Application/chrome.exe`,
-  ];
-  const edge = [
-    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-  ];
-  return firstExisting(choice === 'edge' ? [...edge, ...chrome] : [...chrome, ...edge]);
 }
 
 function viewportFor(canvas) {
@@ -142,10 +114,17 @@ function pngContentEvidence(png, maxSamples = 20_000) {
 
 async function sourceDetails(project, blockers) {
   const files = [
+    path.join(project, 'asset-manifest.json'),
     path.join(project, 'poster.html'),
     path.join(project, 'styles.css'),
+    path.join(project, 'font-faces.css'),
     path.join(project, 'brief.json'),
     path.join(project, 'poster.config.json'),
+    path.join(project, 'poster.json'),
+    path.join(project, 'publish-qa.json'),
+    path.join(project, 'font-manifest.json'),
+    path.join(project, 'font-license-manifest.json'),
+    path.join(project, 'licenses.md'),
   ];
 
   async function walk(directory) {
@@ -447,18 +426,32 @@ async function writeStartupFailure(reportPath, project, strict, finalRequested, 
     release: { finalRequested, finalEligible: false },
     evidence: { viewport: null, dom: null, facts: [], qrCodes: [], fonts: null, outputs: null },
   };
-  await writeReport(reportPath, report);
+  await writeReport(project, reportPath, report);
 }
 
-async function writeReport(reportPath, report) {
-  const temporaryPath = path.join(path.dirname(reportPath), `.qa-report.${randomUUID()}.tmp.json`);
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(report, null, 2)}\n`);
-    await rm(reportPath, { force: true });
-    await rename(temporaryPath, reportPath);
-  } finally {
-    await rm(temporaryPath, { force: true });
-  }
+function runtimeFailure(stage, error) {
+  const failures = {
+    BROWSER_RESOLUTION_FAILED: 'A requested browser executable could not be resolved.',
+    BROWSER_LAUNCH_FAILED: 'The browser could not be launched.',
+    BROWSER_STARTUP_FAILED: 'The browser context or page could not be initialized.',
+    NAVIGATION_FAILED: 'The poster document could not be loaded.',
+    FONT_LOAD_FAILED: 'Required bundled fonts could not be evaluated.',
+    FONT_VALIDATION_FAILED: 'Bundled font files or manifests could not be validated.',
+    ASSET_VALIDATION_FAILED: 'Non-font asset licenses and authorization could not be validated.',
+    PUBLISH_QA_VALIDATION_FAILED: 'Publish QA applicability could not be validated.',
+    PAGE_EVALUATION_FAILED: 'The rendered poster could not be evaluated.',
+    OUTPUT_INSPECTION_FAILED: 'Rendered output inspection could not be completed.',
+  };
+  return finding(failures[stage] ? stage : 'PAGE_EVALUATION_FAILED', failures[stage] ?? failures.PAGE_EVALUATION_FAILED, {
+    error: error?.message ?? String(error),
+    errorCode: error?.code ?? null,
+  });
+}
+
+async function writeReport(project, reportPath, report) {
+  await publishProjectFile(project, reportPath, (temporaryPath) => (
+    writeFile(temporaryPath, `${JSON.stringify(report, null, 2)}\n`)
+  ));
 }
 
 async function main() {
@@ -491,6 +484,14 @@ async function main() {
     if (strict) process.exitCode = 1;
     return;
   }
+  const posterState = await readRequiredJson(project, 'poster.json', blockers);
+  const publishQa = await readRequiredJson(project, 'publish-qa.json', blockers);
+  const fontManifest = await readRequiredJson(project, 'font-manifest.json', blockers);
+  const assetManifest = await readRequiredJson(project, 'asset-manifest.json', blockers);
+  if (posterState) {
+    const issues = validatePosterState(posterState);
+    if (issues.length) blockers.push(finding('POSTER_STATE_INVALID', 'poster.json violates the workflow state contract.', { issues }));
+  }
   const outputPaths = {
     pngPath: await projectOutputPath(project, config.outputs?.png, 'poster.png'),
     mobilePath: await projectOutputPath(project, config.outputs?.mobile, 'poster-mobile.png'),
@@ -499,28 +500,39 @@ async function main() {
   if (new Set([...Object.values(outputPaths), reportPath]).size !== 4) {
     throw new Error('PNG, mobile PNG, PDF, and QA report output paths must be unique.');
   }
-  const viewport = viewportFor(config.canvas);
-  const executablePath = await resolveExecutable(values.browser);
-  const launchOptions = { headless: true };
-  if (executablePath) launchOptions.executablePath = executablePath;
-
   let browser;
+  let runtimeStage = 'FONT_VALIDATION_FAILED';
   try {
+    if (strict && fontManifest) blockers.push(...await validateFontManifest(project, fontManifest));
+    runtimeStage = 'ASSET_VALIDATION_FAILED';
+    if (strict && assetManifest) blockers.push(...await validateAssetManifest(project, assetManifest));
+    runtimeStage = 'BROWSER_RESOLUTION_FAILED';
+    const viewport = viewportFor(config.canvas);
+    const executablePath = await resolveExecutable(values.browser);
+    const launchOptions = { headless: true };
+    if (executablePath) launchOptions.executablePath = executablePath;
+
+    runtimeStage = 'BROWSER_LAUNCH_FAILED';
     browser = await chromium.launch(launchOptions);
+    runtimeStage = 'BROWSER_STARTUP_FAILED';
     const context = await browser.newContext({ viewport, deviceScaleFactor: 1, serviceWorkers: 'block' });
     const blockedResources = await installProjectResourceBoundary(context, project);
     const page = await context.newPage();
+    runtimeStage = 'NAVIGATION_FAILED';
     await page.goto(pathToFileURL(path.join(project, 'poster.html')).href, { waitUntil: 'load' });
     for (const blocked of blockedResources) {
       blockers.push(finding(blocked.code, 'Poster resource was blocked by the project containment boundary.', blocked));
     }
+    runtimeStage = 'FONT_LOAD_FAILED';
     await page.addStyleTag({ content: configuredCss(config.canvas) });
     await page.evaluate(() => document.fonts.ready);
 
+    runtimeStage = 'PAGE_EVALUATION_FAILED';
     const result = await page.evaluate(() => {
       const poster = document.querySelector('#poster');
       const asciiPlaceholderPattern = /\b(TODO|TBD|PLACEHOLDER|LOREM IPSUM)\b/i;
       const chinesePlaceholderPattern = /(二维码占位|待补|待定)/;
+      const starterPhrases = new Set(['PREVIEW', 'Replace this starter content after the brief is approved.']);
       const nodes = [...document.querySelectorAll('body *')];
       const placeholders = [];
       const overflows = [];
@@ -532,7 +544,8 @@ async function main() {
 
       for (const element of nodes) {
         const text = element.children.length === 0 ? element.textContent?.trim() ?? '' : '';
-        if (text && (asciiPlaceholderPattern.test(text) || chinesePlaceholderPattern.test(text))) {
+        if (element.hasAttribute('data-placeholder')
+            || (text && (asciiPlaceholderPattern.test(text) || chinesePlaceholderPattern.test(text) || starterPhrases.has(text)))) {
           placeholders.push({ tag: element.tagName, text: text.slice(0, 160) });
         }
         const style = getComputedStyle(element);
@@ -608,6 +621,26 @@ async function main() {
           && box.left < (poster?.getBoundingClientRect().right ?? window.innerWidth)
           && box.top < (poster?.getBoundingClientRect().bottom ?? document.documentElement.scrollHeight);
       };
+      const textRuns = [];
+      const textWalker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let textNode = textWalker.nextNode(); textNode; textNode = textWalker.nextNode()) {
+        const element = textNode.parentElement;
+        const text = textNode.nodeValue?.trim() ?? '';
+        if (!element || !text || ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(element.tagName) || !visibility(element)) continue;
+        textRuns.push({
+          tag: element.tagName,
+          text: text.normalize('NFC'),
+          fontFamily: getComputedStyle(element).fontFamily,
+          copyBound: Boolean(element.closest('[data-copy]')),
+          factBound: Boolean(element.closest('[data-fact]')),
+        });
+      }
+      const copyBindings = [...document.querySelectorAll('[data-copy]')].map((element) => ({
+        tag: element.tagName,
+        text: (element.innerText ?? element.textContent ?? '').trim().normalize('NFC'),
+        visible: visibility(element),
+      }));
+      const unboundText = textRuns.filter((run) => !run.copyBound && !run.factBound);
       const facts = [...document.querySelectorAll('[data-fact]')].map((element) => ({
         key: element.dataset.fact,
         value: element.textContent?.trim() ?? '',
@@ -636,27 +669,71 @@ async function main() {
         undersizedMobileText,
         images,
         fonts: [...fonts],
+        textRuns,
+        copyBindings,
+        unboundText,
         facts,
         qrCodes,
+        identityCount: document.querySelectorAll('[data-identity], [class*="identity" i], [id*="identity" i], [class*="portrait" i], [id*="portrait" i], [class*="speaker" i], [id*="speaker" i], img[alt*="portrait" i], img[alt*="speaker" i], img[src*="portrait" i], img[src*="speaker" i]').length,
+        logoCount: document.querySelectorAll('[data-logo], [class*="logo" i], [id*="logo" i], img[alt*="logo" i], img[src*="logo" i]').length,
+        qrCount: document.querySelectorAll('[data-qr], [class*="qr" i], [id*="qr" i], img[alt*="qr" i], img[src*="qr" i]').length,
       };
     });
 
-    const requiredFonts = [
-      { family: 'Noto Sans SC', sample: '海报 Poster 2026' },
-      { family: 'Noto Serif SC', sample: '科研 商业 会议' },
-      { family: 'Ma Shan Zheng', sample: '国风书法 AI' },
-    ];
+    runtimeStage = 'PUBLISH_QA_VALIDATION_FAILED';
+    if (publishQa) {
+      const applicability = await derivePublishQaApplicability(project, brief, result);
+      const issues = validatePublishQa(publishQa, applicability);
+      if (issues.length) blockers.push(finding('PUBLISH_QA_INVALID', 'publish-qa.json violates the mechanically derived Publish QA contract.', { issues, applicability }));
+    }
+
+    const requiredFonts = [...new Map(result.textRuns.map((run) => {
+      const family = String(run.fontFamily ?? '').split(',')[0].trim().replace(/^['"]|['"]$/g, '');
+      return [`${family}\0${run.text}`, { family, sample: run.text }];
+    })).values()];
     const loadedFonts = [];
     const failedFonts = [];
+    runtimeStage = 'FONT_LOAD_FAILED';
     for (const font of requiredFonts) {
-      const loaded = await page.evaluate(async ({ family, sample }) => {
-        await document.fonts.load(`32px "${family}"`, sample);
-        return document.fonts.check(`32px "${family}"`, sample);
+      const result = await page.evaluate(async ({ family, sample }) => {
+        const matchingFaces = await document.fonts.load(`32px "${family}"`, sample);
+        const normalizedFamily = family.replace(/^['"]|['"]$/g, '');
+        const declared = matchingFaces.some((face) =>
+          face.family.replace(/^['"]|['"]$/g, '') === normalizedFamily && face.status === 'loaded');
+        return { checked: document.fonts.check(`32px "${family}"`, sample), declared };
       }, font);
-      (loaded ? loadedFonts : failedFonts).push(font.family);
+      const loaded = result === true || (result?.checked === true && result?.declared === true);
+      (loaded ? loadedFonts : failedFonts).push(`${font.family}: ${font.sample}`);
     }
+    runtimeStage = 'PAGE_EVALUATION_FAILED';
     if (strict && failedFonts.length) {
       blockers.push(finding('FONT_LOAD_FAILED', 'One or more required bundled fonts failed to load.', { failedFonts }));
+    }
+    if (strict && fontManifest) {
+      blockers.push(...await validateRenderedGlyphCoverage(project, fontManifest, result.textRuns));
+    }
+
+    if (finalRequested && posterState) {
+      const approvedCopy = (Array.isArray(posterState.approvedCopy) ? posterState.approvedCopy : [])
+        .map((value) => value.normalize('NFC').trim())
+        .sort();
+      const visibleBindings = result.copyBindings.filter((binding) => binding.visible);
+      const actualCopy = visibleBindings.map((binding) => binding.text).sort();
+      const hiddenBindings = result.copyBindings.filter((binding) => !binding.visible);
+      if (hiddenBindings.length) {
+        blockers.push(finding('COPY_NOT_VISIBLE', 'Every data-copy binding must be visibly rendered in Release.', { items: hiddenBindings }));
+      }
+      if (JSON.stringify(actualCopy) !== JSON.stringify(approvedCopy)) {
+        blockers.push(finding('COPY_MISMATCH', 'Visible data-copy text must match poster.json approvedCopy exactly.', {
+          approved: approvedCopy,
+          actual: actualCopy,
+        }));
+      }
+      if (result.unboundText.length) {
+        blockers.push(finding('COPY_UNBOUND', 'Every readable Release string must be bound by data-copy or data-fact.', {
+          items: result.unboundText.slice(0, 50),
+        }));
+      }
     }
 
     if (result.posterCount !== 1) blockers.push(finding('POSTER_ROOT', 'Expected exactly one #poster root.', { count: result.posterCount }));
@@ -740,17 +817,24 @@ async function main() {
       }
     }
 
+    runtimeStage = 'OUTPUT_INSPECTION_FAILED';
     const outputEvidence = strict
       ? await inspectOutputs(project, config, blockers, outputPaths)
       : null;
 
     let visualReviewEvidence = null;
     if (finalRequested) {
-      const declaredStatuses = { config: config.status, brief: brief.status, poster: result.posterStatus };
-      const nonFinal = Object.entries(declaredStatuses).filter(([, value]) => !isFinalStatus(value));
-      if (nonFinal.length) {
-        blockers.push(finding('STATUS_NOT_FINAL', 'Final QA requires final status in config, brief, and poster DOM.', { declaredStatuses, nonFinal }));
+      const declaredStatuses = {
+        workflowMode: posterState?.mode,
+        workflowState: posterState?.state,
+        publishQa: publishQa?.status,
+      };
+      const workflowFinal = posterState?.mode === 'release' && posterState?.state === 'release';
+      const publishPassed = publishQa?.status === 'PASS';
+      if (!workflowFinal) {
+        blockers.push(finding('STATUS_NOT_FINAL', 'Final QA requires poster.json release workflow mode and state.', { declaredStatuses, workflowFinal }));
       }
+      if (!publishPassed) blockers.push(finding('PUBLISH_QA_NOT_PASS', 'Final QA requires publish-qa.json status PASS.', { status: publishQa?.status ?? null }));
       visualReviewEvidence = await inspectVisualReview(project, outputPaths, blockers);
       await inspectQaNarrative(project, outputPaths, blockers);
     }
@@ -769,14 +853,19 @@ async function main() {
         dom: result,
         facts: factEvidence,
         qrCodes: qrEvidence,
-        fonts: { required: requiredFonts.map((font) => font.family), loaded: loadedFonts, failed: failedFonts },
+        fonts: { required: requiredFonts, loaded: loadedFonts, failed: failedFonts, manifest: fontManifest },
         outputs: outputEvidence,
         visualReview: visualReviewEvidence,
       },
     };
-    await writeReport(reportPath, report);
+    await writeReport(project, reportPath, report);
     process.stdout.write(`${JSON.stringify({ status: report.status, blockers: blockers.length, warnings: warnings.length })}\n`);
     if (strict && blockers.length) process.exitCode = 1;
+  } catch (error) {
+    blockers.push(runtimeFailure(runtimeStage, error));
+    await writeStartupFailure(reportPath, project, strict, finalRequested, blockers);
+    process.stdout.write(`${JSON.stringify({ status: 'FAIL', blockers: blockers.length, warnings: warnings.length })}\n`);
+    if (strict) process.exitCode = 1;
   } finally {
     if (browser) await browser.close();
   }

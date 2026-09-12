@@ -1,5 +1,4 @@
 {
-  "status": "preview",
   "facts": [
     { "key": "title", "value": "Poster title", "critical": true }
   ]

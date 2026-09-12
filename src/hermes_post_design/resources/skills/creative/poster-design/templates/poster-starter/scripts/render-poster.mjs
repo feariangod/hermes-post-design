@@ -1,8 +1,10 @@
-import { access, lstat, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { resolveExecutable } from './browser-paths.mjs';
+import { publishProjectFile } from './path-safety.mjs';
 import { collectProjectSourceHashes, installProjectResourceBoundary, validateConfig, validateMeasuredCanvas, validateStaticHtml } from './poster-contract.mjs';
 
 function parseArgs(argv) {
@@ -15,38 +17,6 @@ function parseArgs(argv) {
     values[key.slice(2)] = argv[index + 1];
   }
   return values;
-}
-
-async function firstExisting(paths) {
-  for (const candidate of paths) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // Try the next installed browser.
-    }
-  }
-  return null;
-}
-
-async function resolveExecutable(browserChoice) {
-  if (browserChoice && browserChoice !== 'chrome' && browserChoice !== 'edge') {
-    const absolute = path.resolve(browserChoice);
-    await access(absolute);
-    return absolute;
-  }
-
-  const chrome = [
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-    `${process.env.LOCALAPPDATA ?? ''}/Google/Chrome/Application/chrome.exe`,
-  ];
-  const edge = [
-    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-  ];
-  const preferred = browserChoice === 'edge' ? [...edge, ...chrome] : [...chrome, ...edge];
-  return firstExisting(preferred);
 }
 
 function canvasViewport(canvas) {
@@ -123,9 +93,8 @@ function temporaryOutputPath(project, outputPath) {
   return path.join(project, `.${stem}.${randomUUID()}.tmp${extension}`);
 }
 
-async function publishOutput(temporaryPath, outputPath) {
-  await rm(outputPath, { force: true });
-  await rename(temporaryPath, outputPath);
+async function publishOutput(project, temporaryPath, outputPath) {
+  await publishProjectFile(project, outputPath, (publicationPath) => rename(temporaryPath, publicationPath));
 }
 
 async function sha256(filePath) {
@@ -257,11 +226,11 @@ async function main() {
         [path.basename(pdfPath)]: await sha256(temporaryPaths.pdf),
       },
     };
-    await publishOutput(temporaryPaths.png, pngPath);
-    await publishOutput(temporaryPaths.mobile, mobilePath);
-    await publishOutput(temporaryPaths.pdf, pdfPath);
+    await publishOutput(project, temporaryPaths.png, pngPath);
+    await publishOutput(project, temporaryPaths.mobile, mobilePath);
+    await publishOutput(project, temporaryPaths.pdf, pdfPath);
     await writeFile(temporaryPaths.result, `${JSON.stringify(result, null, 2)}\n`);
-    await publishOutput(temporaryPaths.result, resultPath);
+    await publishOutput(project, temporaryPaths.result, resultPath);
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally {
     await browser.close();

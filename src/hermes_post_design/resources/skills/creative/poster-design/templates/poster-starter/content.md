@@ -1,14 +1,14 @@
-# Approved Poster Content
+# Content Notes
 
-Store the approved display copy in reading order. Keep wording, punctuation, values, and units aligned with `brief.json`.
+`poster.json.approvedCopy` is the sole approved display-copy list; `design.hierarchy` references its zero-based indexes. `brief.json` owns factual values and destinations. Do not keep a second editable copy list here.
 
 ## Primary Message
 
-Add the approved headline and supporting message after direction approval.
+Record the reasoning for headline/support priority, line breaks, and emphasis before composing the Concept. Reference `copyIndex` instead of duplicating approved strings.
 
 ## Information Sections
 
-Add section headings, body copy, captions, labels, and calls to action in their intended scan order.
+Note intended reading order, optional study omissions, and which text layers must remain editable. Final rendered wording must match the authoritative contracts.
 
 ## Source Notes
 
