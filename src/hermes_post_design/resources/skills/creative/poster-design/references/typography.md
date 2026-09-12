@@ -12,6 +12,18 @@ Honor explicit user-requested omissions under the scope rules in `intake.md`; om
 
 Choose heading, body, and numeral roles for the brief before committing composition. Decide family character, weight, line length, hierarchy, and spacing together; reserve expressive display faces for short text. Plan critical or frequently changing copy as editable layers from the start.
 
+### Expressive role
+
+For every direction, choose and explain the title's role: the main visual idea, a partner to the image, or a deliberately quiet information layer. This applies to all archetypes, not only "Conceptual typography". Tie the choice to the creative proposition in `concept-directions.md`.
+
+Choose the appropriate treatment: intentional typesetting, an expressive licensed display face, a limited letterform intervention, custom lettering, or a word-image relationship. Specify a visible decision beyond "large and bold": line structure that changes emphasis, contrast between title and supporting type, an edge or counterform linked to the subject, or measured restraint that gives the main image room. A single family is valid when those relationships carry the idea; extra fonts and effects are not evidence of creativity.
+
+Where exploratory studies are already budgeted, compare inexpensive local title crops within that allowance when a title-led or word-image treatment is uncertain, holding copy, image, and canvas constant. Once a direction is selected, small title adjustments are local refinements within the approved flexible scope, not mandatory new studies. Skip comparisons when the treatment is clear or typography is locked. These choices add no approval gate; changes to locked principles, new image calls, and font acquisition retain their existing authorization requirements.
+
+Inspect the actual title silhouette, spacing, stroke balance, and relationship to the image at full size and the declared viewing size. Keep characters recognizable; factual text prioritizes precision. If a local readability repair weakens the expression, adjust the layout or supporting elements and review the whole composition again. Apply the existing semantic-text, editability, license, and glyph requirements to any custom treatment.
+
+### Font preparation
+
 `font-config.json` selects local families by semantic role:
 
 ```json

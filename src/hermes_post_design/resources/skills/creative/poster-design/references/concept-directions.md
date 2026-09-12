@@ -2,12 +2,31 @@
 
 Use before choosing a Concept direction. Select an archetype for the communication need, make its visible choices concrete, then compose locally or compile a prompt for the layers needing generation. Archetypes are starting structures, not fixed styles.
 
+## Creative throughline
+
+For every route, including a direct Concept, put the creative proposition in the existing `poster.json.direction`: what the audience should understand or feel, and the visible relationship that makes it happen. A style label such as "bold editorial" is incomplete without that relationship. An existing user-approved direction supplies the proposition; develop it within scope.
+
+Before full production, make a compact treatment covering the decisions below. Keep it with the existing direction or working notes, not in a new state contract. It is a design aid, not six user questions or a separate deliverable. Facts and approved copy retain their existing owners.
+
+| Decision | Make a visible choice | Check the contribution |
+|---|---|---|
+| Copy and voice | When wording is delegated, choose a specific angle, rhythm, or image in language; connect title and action. Preserve supplied exact copy. | Does the phrasing invite this audience into this particular subject, rather than merely name a category? |
+| Typography | Decide whether type leads, shares the idea with the image, or deliberately supports it. Choose letterform character, line structure, and scale relationships accordingly. | Can the title treatment express the proposition, or is its quiet supporting role justified? A family name and font size alone do not explain it. |
+| Imagery | Choose a meaningful gesture, interaction, object relationship, viewpoint, or moment; plan authentic assets first. | What does the image say beyond "this looks attractive"? Does that meaning survive without the explanatory note? |
+| Composition and rhythm | Shape the reading sequence through scale, grouping, alignment, counterspace, and a deliberate focal relationship. | Do the word and image belong together? Is there both emphasis and room to breathe? |
+| Color, light, and material | Assign each a communicative role: attention, emotional temperature, contrast, authenticity, or a subject-specific association. | Would a different treatment change the meaning? If it only adds noise, simplify it. |
+| Refinement and adaptation | Preserve the proposition while adjusting letterforms, crop, spacing, image edges, or format. | Does the actual result still convey the intended feeling after local repairs and at the delivery size? |
+
+These are connected decisions, not six independent effects. A quiet information poster can express its idea through precise relationships and restraint. Use custom lettering, textures, or dramatic lighting only when they serve the brief; a standard licensed typeface can be the strongest choice. Reuse a motif across layers only when the relationship is meaningful, not as compulsory decoration.
+
+At each handoff from treatment to image prompt, composition, refinement, and export, compare the result with the proposition. Preserve the expressive choices that matter when changing tools or repairing defects. Treat the generated layer as material to compose with; a polished image alone does not finish the design. Follow the creative review in `quality-rubric.md` before presenting the result.
+
 ## Direction option format
 
 Skip options when the direction is clear. When it is not, compare two or three inexpensive composition studies, or text options if that is the user's preference. Each direction contains:
 
 - a short direction name;
-- one-sentence visual proposition;
+- one-sentence creative proposition and the visible relationship that carries it;
 - hero and layout skeleton;
 - palette and material language;
 - one sentence explaining the fit.
@@ -93,8 +112,8 @@ Recommend the strongest direction for the objective and explain the trade-off br
 Compile the selected direction in this order:
 
 1. **Deliverable and audience** — purpose, intended action, audience, viewing context, and exact final width and height required by the selected host adapter.
-2. **Core visual proposition** — selected archetype, one visual metaphor, mood, and first-glance message.
-3. **Composition and information zones** — hero scale/position, title, support, facts/action zones, safe margins, depth, and reading order.
+2. **Core visual proposition** — selected archetype, the intended feeling or understanding, and the specific gesture, interaction, or visual relationship that conveys it.
+3. **Composition and information zones** — hero scale/position, title, support, facts/action zones, safe margins, depth, and reading order; specify how text and image relate, not only their separate rectangles.
 4. **Subject and asset roles** — subject/action, hero prop, camera, lighting, and explicit content/style/layout role for every reference.
 5. **Approved copy hierarchy** — exact approved strings grouped as headline, subheading, facts, call to action, and permitted microcopy; allow no invented readable text.
 6. **Constraints and output** — the requested layer, composition study, or single Concept poster; prohibited artifacts, dimensions, and documented provider constraints. A background-layer prompt must exclude text and identity elements that will be composed locally.
@@ -104,6 +123,7 @@ Compile the selected direction in this order:
 - Remove resolution theater such as `2K/4K/8K`; report measured decoded dimensions instead.
 - At the Concept step, deliver one composed poster, not a main-and-alternate pair or process sheet. Individual generation calls may produce only a background or other planned layer; do not ask the model for a flattened poster when production needs separate layers. Earlier studies are separate labeled comparisons and may be shown together.
 - Convert vague style words into visible composition, light, material, palette, lens, and typography choices.
+- When generating only one layer, carry the shared viewpoint, light, silhouette, and text relationship into that layer's instructions; implement the planned typographic expression in the local composition, not as an unrelated default overlay.
 - Keep approved copy in one authoritative block; never repeat conflicting variants.
 - Treat model reference preservation as semantic; use original layers whenever fidelity is required. Respect the planned silhouette, perspective, light, and reserved text space when generating surrounding imagery.
 - Inspect unbranded subjects and equipment for logo-like marks, brand-like marks, pseudo-lettering, and signature shapes; a prompt saying “no logo” is not proof that none were generated.

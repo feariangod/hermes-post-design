@@ -12,14 +12,16 @@ metadata:
 
 Design the communication first, choose the production method second, then use the capabilities actually available in the current host. A poster succeeds when its intended audience sees the right message and can take the intended action.
 
+Carry one brief-specific creative proposition through the whole poster. Copy, typography, imagery, composition, color, and material each need an intentional role in that expression; restraint can be the right role. Preserve the idea through production and refinement, and assess its visible expression separately from technical correctness.
+
 ## Route
 
 1. Before creating the brief, read [intake.md](references/intake.md). Record the audience, viewing context, first-glance message, action, information hierarchy, and brand constraints in `poster.json.design`.
 2. Before choosing production, read [asset-policy.md](references/asset-policy.md). Plan which layers must retain original pixels, which need editable text, and which benefit from generation. Choose image-led, layered, or deterministic production for those needs, not because an image tool exists.
 3. Read [host-adapters.md](references/host-adapters.md) before executing the chosen production method or any external operation. Check capability, existing authorization, and remaining call budget; record any necessary adaptation.
-4. When choosing or exploring a visual direction, read [concept-directions.md](references/concept-directions.md). Use an explicit direction directly; when composition is uncertain, offer two or three inexpensive studies within the agreed budget. Text options are available, not a mandatory gate.
-5. Before composing or accepting readable text, read [typography.md](references/typography.md). Choose heading, body, and numeral roles early, using local licensed fonts and exact approved copy.
-6. Before reporting a study, Concept, Publish, or Release result, read [quality-rubric.md](references/quality-rubric.md). Review the artifact in its actual viewing context and address the highest-impact problems first.
+4. Before developing or refining a visual direction, read [concept-directions.md](references/concept-directions.md). Make the creative proposition visible across the planned layers, including a direct Concept. Use an explicit direction directly; when composition is uncertain, offer two or three inexpensive studies within the agreed budget. Text options are available, not a mandatory gate.
+5. Before composing or accepting readable text, read [typography.md](references/typography.md). Decide how type expresses or supports the idea, then choose heading, body, and numeral roles using local licensed fonts and exact approved copy.
+6. Before reporting a study, Concept, Publish, or Release result, read [quality-rubric.md](references/quality-rubric.md). Review creative expression and technical correctness in the actual viewing context; address the highest-impact problems first.
 
 ## Stages
 

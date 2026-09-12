@@ -8,13 +8,13 @@ The default request is a directly publishable PNG, with a final-size near-produc
 
 Collect or infer:
 
-1. objective, audience, viewing context, first-glance takeaway, and intended action;
+1. objective, audience, viewing context, first-glance takeaway, intended feeling, and intended action;
 2. exact approved copy and information priority, with unresolved facts explicitly marked;
 3. requested outputs and final `size="WIDTHxHEIGHT"` for each canvas;
 4. real people, products, logos, QR URL, authorized assets, and brand invariants;
 5. known direction/references, desired editability, and an appropriate exploration budget.
 
-Ask only when the answer materially changes the route, visual center, audience, or factual responsibility. Otherwise record reasonable assumptions and continue. Give a one-sentence `Design Read` before production; do not turn the agreement into a long questionnaire.
+Ask only when the answer materially changes the route, visual center, audience, or factual responsibility. Otherwise record reasonable assumptions and continue. Give a one-sentence `Design Read` before production: what this audience should understand or feel, and why they would care. Infer a suitable emotional register from the brief when none is supplied; warmth, precision, calm, urgency, and playfulness are choices, not defaults. Do not turn the agreement into a long questionnaire.
 
 ## Portable design agreement
 

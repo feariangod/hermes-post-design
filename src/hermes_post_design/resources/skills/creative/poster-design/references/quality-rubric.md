@@ -10,6 +10,21 @@ Ask what is seen first, what is understood next, and whether the intended action
 
 Report one to three highest-impact findings with location, observed problem, intended improvement, and scoped fix. Hard blockers still all need recording. Fix the problem and recheck; do not assign aesthetic PASS from file presence, a successful render, or a numerical score alone. State unverified visual checks honestly.
 
+### Creative review
+
+Review the rendered poster against the proposition recorded in `poster.json.direction`, using the connected decisions in `concept-directions.md`. Evaluate these observable questions:
+
+- **Meaning and feeling:** what can a viewer understand or feel from the image itself? Name the gesture, word-image relationship, rhythm, or restraint that carries it; the treatment note is not visible evidence.
+- **Specificity:** could an unrelated title replace this one without changing anything else? If so, look for a missing subject-specific relationship. This is a diagnostic, not a demand for novelty in a constrained brand system.
+- **Integration:** do typography, imagery, composition, color, and material reinforce the same intent? A striking hero with an unrelated default text overlay needs refinement when the brief calls for expressive integration.
+- **Restraint and context:** which elements earn attention, and which should recede? Confirm that expression survives the actual phone, crop, or print view without sacrificing critical information.
+
+Report technical findings and creative findings separately in the existing review notes or `qa-report.md`. Use an evidence-based creative verdict such as `convincing`, `needs refinement`, or `not reviewed`, with a concrete observation. These are narrative judgments, not new runtime states. An unrendered plan can be reviewed as a plan but cannot receive a rendered creative or visual PASS.
+
+A technically clean but creatively weak Concept remains a draft for local refinement; explain the expressive gap rather than presenting technical PASS as complete design quality. Do not record an all-PASS `visual-review.json` solely because text matches, fonts load, and boxes fit. Its existing checks and notes must reflect actual composition, typographic expression or justified restraint, and the intended feeling as well as readability.
+
+When feedback says "stiff", "generic", or "lifeless", locate the largest expressive gap and revise the relevant relationship first: wording where editable, title treatment, subject interaction, spacing/rhythm, or light/material. Preserve working elements. Recheck the whole poster at the delivery size; apply the existing direction budget, locked/flexible approval scope, and image-call authorization. Do not default to more effects or regenerate every layer.
+
 ## Composition study gates
 
 Studies need clear alternative compositions, comparable scale/aspect ratio, readable displayed approved copy, and no invented facts or misleading identity claim. They may omit unresolved facts and leave blank zones. Label them `composition study - not for publication`; do not apply final-size, complete-copy, QR, or Release gates to these early comparisons. Develop the selected study into one complete Concept before asking for publication-stage approval.
